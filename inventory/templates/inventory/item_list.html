@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+
+{% block title %}Items | Kwena Gear Room{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="action-bar">
+        <div>
+            <h2>Items</h2>
+            <p class="section-note">Add, edit, and track gear. Each item gets a QR code automatically.</p>
+        </div>
+        <div class="actions">
+            <a class="button-link" href="{% url 'inventory:item_create' %}">Add item</a>
+        </div>
+    </div>
+</div>
+
+<div class="grid grid-2">
+    <div class="card">
+        <h3>Inventory at a glance</h3>
+        <p class="section-note">A quick snapshot across every item in the system.</p>
+        <div class="stat-grid" data-region="item-stats">
+            <div class="stat"><div class="stat-value">{{ total_items }}</div><div class="stat-label">Total items</div></div>
+            <div class="stat"><div class="stat-value">{{ total_available }}</div><div class="stat-label">Available</div></div>
+            <div class="stat"><div class="stat-value">{{ total_out }}</div><div class="stat-label">Checked out</div></div>
+            <div class="stat"><div class="stat-value">{{ maintenance_count }}</div><div class="stat-label">In maintenance</div></div>
+        </div>
+    </div>
+    <div class="card dashboard-side">
+        <h3>Items in maintenance</h3>
+        <p class="section-note">Gear currently out for repair or servicing.</p>
+        <div class="scroll-area">
+            <div class="table-wrapper" data-region="maintenance-open">
+                <table>
+                    <thead>
+                        <tr><th>Item</th><th>Location</th><th>Expected back</th></tr>
+                    </thead>
+                <tbody data-region="all-items-body">
+                        {% for record in maintenance_open %}
+                            <tr>
+                                <td><a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a></td>
+                                <td>{{ record.item.location.name }}</td>
+                                <td>
+                                    {% if record.expected_return %}
+                                        {{ record.expected_return }}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="3">No items in maintenance.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <p style="margin-top:16px;">
+            <a class="button-link secondary btn-sm" href="{% url 'inventory:maintenance' %}">Open maintenance</a>
+        </p>
+    </div>
+</div>
+
+<div class="card">
+    <button type="button" class="collapse-toggle" aria-expanded="true">
+        <h3>All items</h3>
+        <span class="collapse-icon">&#9662;</span>
+    </button>
+    <p class="section-note">Every item in the system. Use a header to jump to its detail or edit page.</p>
+    <div class="item-filter" id="item-filter">
+        <div class="item-filter-row">
+            <div class="item-filter-search">
+                <input type="search" id="item-search" class="text-input" placeholder="Search by name, SKU, type&hellip;" autocomplete="off">
+            </div>
+            <div class="item-filter-selects">
+                <label class="field-inline">
+                    <span>Location</span>
+                    <select id="filter-location" class="select-input">
+                        <option value="">All locations</option>
+                        {% for loc in locations %}
+                            <option value="{{ loc.name }}">{{ loc.name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="field-inline">
+                    <span>Type</span>
+                    <select id="filter-category" class="select-input">
+                        <option value="">All types</option>
+                        {% for cat in categories %}
+                            <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="field-inline">
+                    <span>Availability</span>
+                    <select id="filter-availability" class="select-input">
+                        <option value="">Any</option>
+                        <option value="available">In stock</option>
+                        <option value="out">Out / empty</option>
+                    </select>
+                </label>
+                <button type="button" class="button-link secondary btn-sm" id="item-filter-reset">Reset</button>
+            </div>
+        </div>
+        <p class="item-filter-status" id="item-filter-status" aria-live="polite"></p>
+    </div>
+    <div class="collapse-body">
+        <div class="table-wrapper">
+            <table id="all-items-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Type</th>
+                        <th>Location</th>
+                        <th>Condition</th>
+                        <th>Total</th>
+                        <th>Available</th>
+                        <th>Out</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                        <tr class="all-item-row" data-location="{{ item.location.name }}" data-category="{{ item.category }}" data-available="{{ item.quantity_available }}" data-search="{{ item.name }} {{ item.sku }} {{ item.category }} {{ item.subcategory }}">
+                            <td>
+                                    <a class="text-link" href="{% url 'inventory:item_detail' item.pk %}">{{ item.name }}</a>
+                            </td>
+                            <td>{{ item.category }}{% if item.subcategory %} &middot; {{ item.subcategory }}{% endif %}</td>
+                            <td>{{ item.location.name }}</td>
+                            <td>{{ item.condition.name|default:"&mdash;" }}</td>
+                            <td>{{ item.quantity_total }}</td>
+                            <td>
+                                {% if item.quantity_available > 0 %}
+                                    <span class="pill pill-success">{{ item.quantity_available }}</span>
+                                {% else %}
+                                    <span class="pill pill-danger">0</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.quantity_out }}</td>
+                            <td class="actions-cell items-actions">
+                                <span class="actions-inner">
+                                    <a class="button-link secondary btn-sm" href="{% url 'inventory:item_edit' item.pk %}">Edit</a>
+                                </span>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr class="all-item-row"><td colspan="8">No items yet. Use "Add item" to create one.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <button type="button" class="loc-view-more" id="all-items-more">View more</button>
+    </div>
+</div>
+{% endblock %}

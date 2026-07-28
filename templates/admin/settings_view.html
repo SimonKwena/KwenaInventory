@@ -1,0 +1,74 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}{{ title }} | Django Administration{% endblock %}
+
+{% block content %}
+<div id="content" class="colM">
+    <h1>{{ title }}</h1>
+    <p class="help">Read-only overview of the current Django configuration (secrets are not shown).</p>
+
+    <div class="settings-groups">
+        {% for group_title, rows in groups %}
+        <div class="module">
+            <h2>{{ group_title }}</h2>
+            <table>
+                <tbody>
+                    {% for key, value in rows %}
+                    <tr>
+                        <th scope="row">{{ key }}</th>
+                        <td><code>{{ value }}</code></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+
+    <br>
+    <a href="{% url 'admin:index' %}" class="button">&laquo; Back to admin</a>
+</div>
+
+<style>
+    .settings-groups {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+        gap: 16px;
+        margin-top: 12px;
+    }
+    .settings-groups .module {
+        background: var(--body-bg, #fff);
+        border: 1px solid var(--hairline-color, #e0e0e0);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .settings-groups .module h2 {
+        margin: 0;
+        padding: 8px 12px;
+        font-size: 13px;
+        background: var(--darkened-bg, #f8f8f8);
+        border-bottom: 1px solid var(--hairline-color, #e0e0e0);
+    }
+    .settings-groups table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .settings-groups th, .settings-groups td {
+        text-align: left;
+        padding: 8px 12px;
+        vertical-align: top;
+        border-bottom: 1px solid var(--hairline-color, #eee);
+        font-size: 12px;
+        word-break: break-word;
+    }
+    .settings-groups th {
+        width: 42%;
+        color: var(--body-quiet-color, #666);
+        font-weight: 600;
+    }
+    .settings-groups code {
+        font-family: var(--font-family-monospace, monospace);
+        font-size: 12px;
+    }
+</style>
+{% endblock %}

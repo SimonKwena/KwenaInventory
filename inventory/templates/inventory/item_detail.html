@@ -1,0 +1,112 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}{{ item.name }} | Kwena Gear Room{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="action-bar">
+        <div>
+            <h2>{{ item.name }}</h2>
+            <p class="section-note">Item details, location, and QR code.</p>
+        </div>
+        <div class="actions">
+            {% if request.user.is_staff %}
+                <a class="button-link" href="{% url 'inventory:item_edit' item.pk %}">Edit item</a>
+                <a class="button-link secondary" href="{% url 'inventory:maintenance' %}?item={{ item.pk }}">Send to maintenance</a>
+            {% endif %}
+            {% if request.user.is_authenticated and not request.user.is_staff %}
+                <div class="item-detail-cart">
+                    <div class="item-tile-qty">
+                        <label class="label" for="detail-cart-qty-{{ item.pk }}">Qty</label>
+                        <input type="number" id="detail-cart-qty-{{ item.pk }}" class="cart-qty" value="1" min="1" max="{{ item.quantity_available|default:1 }}">
+                    </div>
+                    <form method="post" action="{% url 'inventory:cart_add' %}" class="cart-add-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="book_ahead">
+                        <input type="hidden" name="item_id" value="{{ item.pk }}">
+                        <input type="hidden" name="quantity" value="1">
+                        <button type="submit" class="button-link secondary">Add &middot; Book ahead</button>
+                    </form>
+                    {% if can_check_out %}
+                    <form method="post" action="{% url 'inventory:cart_add' %}" class="cart-add-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="check_out">
+                        <input type="hidden" name="item_id" value="{{ item.pk }}">
+                        <input type="hidden" name="quantity" value="1">
+                        <button type="submit" class="button-link secondary">Add &middot; Check out</button>
+                    </form>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="grid grid-2" style="align-items:start;">
+        <div>
+            <p><strong>Location:</strong> {{ item.location.name }}</p>
+            <p><strong>SKU:</strong> {{ item.sku }}</p>
+            <p><strong>Description:</strong> {{ item.description|default:"No description" }}</p>
+            <p><strong>Available:</strong> {{ item.quantity_available }} / {{ item.quantity_total }}</p>
+            <p><strong>Out:</strong> {{ item.quantity_out }}</p>
+            {% if item.category %}<p><strong>Category:</strong> {{ item.category }}{% if item.subcategory %} &middot; {{ item.subcategory }}{% endif %}</p>{% endif %}
+        </div>
+        {% if item.qr_image %}
+        <div class="qr-area">
+            <h3>QR code</h3>
+            <div class="qr-frame" id="qr-frame">
+                <img src="{{ item.qr_image.url }}" alt="QR code for {{ item.name }}" id="qr-image">
+                <span class="qr-caption">{{ item.name }}</span>
+            </div>
+            <div class="qr-actions">
+                <a class="button-link secondary btn-sm" href="{{ item.qr_image.url }}" download="{{ item.sku|default:item.name }}-qr.png">Download</a>
+                <button type="button" class="button-link secondary btn-sm" id="print-qr">Print</button>
+                <button type="button" class="button-link secondary btn-sm" id="share-qr">Share</button>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <p style="margin-top:18px;">
+        <a class="button-link secondary" href="{% url 'inventory:home' %}">Back to home</a>
+    </p>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        var printBtn = document.getElementById("print-qr");
+        if (printBtn) {
+            printBtn.addEventListener("click", function () { window.print(); });
+        }
+        var shareBtn = document.getElementById("share-qr");
+        if (shareBtn) {
+            shareBtn.addEventListener("click", async function () {
+                var img = document.getElementById("qr-image");
+                var url = img ? img.src : window.location.href;
+                var shareData = {
+                    title: "{{ item.name }} QR code",
+                    text: "Scan to manage {{ item.name }} in the Kwena Gear Room",
+                    url: url
+                };
+                try {
+                    if (navigator.share) {
+                        await navigator.share(shareData);
+                        return;
+                    }
+                } catch (err) {
+                    return;
+                }
+                try {
+                    await navigator.clipboard.writeText(url);
+                    var original = shareBtn.textContent;
+                    shareBtn.textContent = "Link copied";
+                    setTimeout(function () { shareBtn.textContent = original; }, 2000);
+                } catch (err) {
+                    window.prompt("Copy this link:", url);
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
+

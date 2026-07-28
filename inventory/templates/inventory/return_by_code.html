@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block title %}Return by code | Kwena Gear Room{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="action-bar">
+        <div>
+            <h2>Return by slip code</h2>
+            <p class="section-note">
+                Type the member's slip code (e.g. KW-0042) to pull up their loan, then
+                select the items coming back. Returns are linked to that exact loan so the
+                request status updates precisely.
+            </p>
+        </div>
+        <a class="button-link secondary btn-sm" href="{% url 'inventory:requests' %}">Back to requests</a>
+    </div>
+</div>
+
+<div class="card">
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-row">
+            <div class="field-input-group">
+                <label class="label" for="reference-code">Slip code</label>
+                <div class="field-input-row">
+                    <input type="text" name="reference_code" id="reference-code"
+                           value="{{ reference_code }}" placeholder="KW-0042" autocomplete="off">
+                    <button type="submit" name="lookup" class="button-link">Look up</button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% if request_obj %}
+<div class="card">
+    <div class="action-bar">
+        <div>
+            <h3>{{ request_obj.reference_code }} &middot; {{ request_obj.person_name|default:request_obj.user.username }}</h3>
+            <p class="section-note">
+                {{ request_obj.get_transaction_type_display }} &middot;
+                {% if request_obj.is_returned %}<span class="pill pill-neutral">Returned</span>
+                {% elif request_obj.is_handed_over %}<span class="pill pill-success">Collected</span>
+                {% else %}<span class="pill pill-success">Approved</span>{% endif %}
+            </p>
+        </div>
+    </div>
+
+    {% if request_obj.is_returned %}
+        <p class="section-note">This loan has already been returned.</p>
+    {% else %}
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="reference_code" value="{{ request_obj.reference_code }}">
+            <div class="item-grid">
+                {% for line in request_obj.items.all %}
+                    <article class="item-tile">
+                        <div class="item-tile-head">
+                            <h4>{{ line.item.name }}</h4>
+                            <span class="pill">{{ line.quantity }} out</span>
+                        </div>
+                        <div class="item-tile-meta">
+                            <label class="label" for="ret-qty-{{ line.item.pk }}">Return qty</label>
+                            <input type="number" id="ret-qty-{{ line.item.pk }}" name="quantities"
+                                   value="{{ line.quantity }}" min="1" max="{{ line.quantity }}">
+                        </div>
+                        <input type="hidden" name="item_ids" value="{{ line.item.pk }}">
+                    </article>
+                {% endfor %}
+            </div>
+            <div class="actions">
+                <button type="submit" name="return_items" class="button-link">Return selected items</button>
+            </div>
+        </form>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if is_edit %}Edit {{ item.name }}{% else %}Add item{% endif %} | Kwena Gear Room{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="action-bar">
+        <div>
+            <h2>{% if is_edit %}Edit item{% else %}Add item{% endif %}</h2>
+            <p class="section-note">
+                {% if is_edit %}
+                    Update the gear details below. Entering a SKU that belongs to another item merges this one into it.
+                {% else %}
+                    Create a new piece of gear. A QR code is generated automatically; an existing SKU adds to that item's stock.
+                {% endif %}
+            </p>
+        </div>
+        <div class="actions">
+            <a class="button-link secondary" href="{% url 'inventory:dashboard' %}">Back to dashboard</a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <form method="post" action="{% if is_edit %}{% url 'inventory:item_edit' item.pk %}{% else %}{% url 'inventory:item_create' %}{% endif %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="message error">{% for e in form.non_field_errors %}<span>{{ e }}</span>{% endfor %}</div>
+        {% endif %}
+
+        <h3 class="form-section-title">Details</h3>
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                {{ form.name }}
+                {{ form.name.errors }}
+            </div>
+            <div class="field-input-group">
+                <label class="label" for="{{ form.sku.id_for_label }}">{{ form.sku.label }}</label>
+                {{ form.sku }}
+                {{ form.sku.errors }}
+            </div>
+        </div>
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
+                {{ form.category }}
+                {{ form.category.errors }}
+            </div>
+            <div class="field-input-group" id="category-other-wrap" style="display:none;">
+                <label class="label" for="{{ form.category_other.id_for_label }}">{{ form.category_other.label }}</label>
+                {{ form.category_other }}
+                {{ form.category_other.errors }}
+            </div>
+        </div>
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.subcategory.id_for_label }}">{{ form.subcategory.label }}</label>
+                {{ form.subcategory }}
+                {{ form.subcategory.errors }}
+            </div>
+            <div class="field-input-group" id="subcategory-other-wrap" style="display:none;">
+                <label class="label" for="{{ form.subcategory_other.id_for_label }}">{{ form.subcategory_other.label }}</label>
+                {{ form.subcategory_other }}
+                {{ form.subcategory_other.errors }}
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+                {{ form.description }}
+                {{ form.description.errors }}
+            </div>
+        </div>
+
+        <h3 class="form-section-title">Stock</h3>
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.quantity_total.id_for_label }}">{{ form.quantity_total.label }}</label>
+                {{ form.quantity_total }}
+                {{ form.quantity_total.errors }}
+            </div>
+            <div class="field-input-group">
+                <label class="label" for="{{ form.quantity_out.id_for_label }}">{{ form.quantity_out.label }}</label>
+                {{ form.quantity_out }}
+                {{ form.quantity_out.errors }}
+            </div>
+        </div>
+
+        <h3 class="form-section-title">Classification</h3>
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.location.id_for_label }}">{{ form.location.label }}</label>
+                {{ form.location }}
+                {{ form.location.errors }}
+            </div>
+            <div class="field-input-group">
+                <label class="label" for="{{ form.condition.id_for_label }}">{{ form.condition.label }}</label>
+                {{ form.condition }}
+                {{ form.condition.errors }}
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
+                {{ form.status }}
+                {{ form.status.errors }}
+            </div>
+        </div>
+
+        <h3 class="form-section-title">Media</h3>
+        <div class="form-row">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.image.id_for_label }}">{{ form.image.label }}</label>
+                {{ form.image }}
+                {{ form.image.errors }}
+            </div>
+        </div>
+        {% if is_edit and item.qr_image %}
+            <div class="qr-preview">
+                <span class="section-note">Current QR code</span>
+                <img src="{{ item.qr_image.url }}" alt="QR code for {{ item.name }}">
+            </div>
+        {% endif %}
+
+        <div class="actions">
+            <button type="submit" class="button-link">{% if is_edit %}Save changes{% else %}Add item{% endif %}</button>
+            <a class="button-link secondary" href="{% url 'inventory:dashboard' %}">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+    function toggleOther(selectEl, otherId) {
+        var other = document.getElementById(otherId);
+        if (!other) { return; }
+        var show = selectEl && selectEl.value === "Other";
+        other.style.display = show ? "" : "none";
+        var input = other.querySelector("input, textarea, select");
+        if (input) { input.required = show; }
+    }
+    document.addEventListener("DOMContentLoaded", function () {
+        var pairs = [["id_category", "category-other-wrap"], ["id_subcategory", "subcategory-other-wrap"]];
+        pairs.forEach(function (pair) {
+            var sel = document.getElementById(pair[0]);
+            if (!sel) { return; }
+            toggleOther(sel, pair[1]);
+            sel.addEventListener("change", function () { toggleOther(sel, pair[1]); });
+        });
+    });
+</script>
+{% endblock %}

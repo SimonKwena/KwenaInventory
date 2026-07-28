@@ -1,0 +1,247 @@
+{% extends 'base.html' %}
+{% load inventory_extras %}
+
+{% block title %}Slip {{ code }} | Kwena Gear Room{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="action-bar">
+        <div>
+            <h2>Slip {{ code }}</h2>
+            <p class="section-note">
+                Every request sharing this desk code &mdash; the loan and any
+                check-in return &mdash; shown together.
+            </p>
+        </div>
+        <a class="button-link secondary" href="{% url 'inventory:requests' %}">Back to requests</a>
+    </div>
+
+    <div class="slip-code-block">
+        <span class="slip-code-label">Slip code</span>
+        <span class="slip-code" id="slip-code">{{ code }}</span>
+        <button type="button" class="button-link secondary btn-sm" id="copy-slip" data-copy-target="slip-code">Copy code</button>
+    </div>
+
+    <dl class="detail-list">
+        <div class="detail-row">
+            <dt>Member</dt>
+            <dd>{{ slip.person_name|default:slip.user.username }}{% if slip.user %} ({{ slip.user.username }}){% endif %}</dd>
+        </div>
+        <div class="detail-row">
+            <dt>Type</dt>
+            <dd>{{ slip.transaction_type|type_label }}</dd>
+        </div>
+        <div class="detail-row">
+            <dt>Requested</dt>
+            <dd>{{ slip.created_at|date:"D d M Y, H:i" }}</dd>
+        </div>
+        {% if slip.taken_at %}
+        <div class="detail-row">
+            <dt>Pickup</dt>
+            <dd>{{ slip.taken_at|date:"D d M Y, H:i" }}</dd>
+        </div>
+        {% endif %}
+        {% if slip.expected_return %}
+        <div class="detail-row">
+            <dt>Return due</dt>
+            <dd>{{ slip.expected_return|date:"D d M Y, H:i" }}</dd>
+        </div>
+        {% endif %}
+        {% if slip.decided_at %}
+        <div class="detail-row">
+            <dt>{% if slip.approval_status == "approved" %}Approved{% else %}Decided{% endif %}</dt>
+            <dd>
+                {{ slip.decided_at|date:"D d M Y, H:i" }}
+                {% if slip.decided_by_name %}&middot; {{ slip.decided_by_name }}{{ slip.decided_by|admin_suffix }}{% endif %}
+            </dd>
+        </div>
+        {% endif %}
+        {% if slip.handed_over_at %}
+        <div class="detail-row">
+            <dt>Collected</dt>
+            <dd>
+                {{ slip.handed_over_at|date:"D d M Y, H:i" }}
+                {% if slip.handed_over_by_name %}&middot; {{ slip.handed_over_by_name }}{{ slip.handed_over_by|admin_suffix }}{% endif %}
+            </dd>
+        </div>
+        {% endif %}
+        {% if slip.returned_at %}
+        <div class="detail-row">
+            <dt>Returned</dt>
+            <dd>
+                {{ slip.returned_at|date:"D d M Y, H:i" }}
+                {% if slip.returned_by_name %}&middot; {{ slip.returned_by_name }}{{ slip.returned_by|admin_suffix }}{% endif %}
+            </dd>
+        </div>
+        {% endif %}
+        {% if slip.is_voided %}
+        <div class="detail-row">
+            <dt>Voided</dt>
+            <dd>
+                {% if slip.voided_at %}{{ slip.voided_at|date:"D d M Y, H:i" }}{% endif %}
+                {% if slip.voided_by_name %}&middot; {{ slip.voided_by_name }}{{ slip.voided_by|admin_suffix }}{% endif %}
+                {% if slip.voided_reason %}<br>{{ slip.voided_reason }}{% endif %}
+            </dd>
+        </div>
+        {% endif %}
+        {% if slip.notes %}
+        <div class="detail-row">
+            <dt>Notes</dt>
+            <dd>{{ slip.notes }}</dd>
+        </div>
+        {% endif %}
+    </dl>
+
+    <h3>Slip history</h3>
+    <p class="section-note">What's happened with this slip code, oldest first.</p>
+    <ul class="timeline">
+        <li class="timeline-item">
+            <span class="timeline-dot"></span>
+            <div class="timeline-body">
+                <span class="timeline-title">Request raised</span>
+                <span class="timeline-meta">{{ slip.created_at|date:"D d M Y, H:i" }} &middot; {{ slip.person_name|default:slip.user.username }}{{ slip.user|admin_suffix }}</span>
+            </div>
+        </li>
+        {% if slip.decided_at %}
+        <li class="timeline-item">
+            <span class="timeline-dot"></span>
+            <div class="timeline-body">
+                <span class="timeline-title">
+                    {% if slip.approval_status == "approved" %}Approved{% else %}Rejected{% endif %}
+                </span>
+                <span class="timeline-meta">{{ slip.decided_at|date:"D d M Y, H:i" }}{% if slip.decided_by_name %} &middot; {{ slip.decided_by_name }}{{ slip.decided_by|admin_suffix }}{% endif %}</span>
+            </div>
+        </li>
+        {% endif %}
+        {% if slip.handed_over_at %}
+        <li class="timeline-item">
+            <span class="timeline-dot"></span>
+            <div class="timeline-body">
+                <span class="timeline-title">Collected</span>
+                <span class="timeline-meta">{{ slip.handed_over_at|date:"D d M Y, H:i" }}{% if slip.handed_over_by_name %} &middot; {{ slip.handed_over_by_name }}{{ slip.handed_over_by|admin_suffix }}{% endif %}</span>
+            </div>
+        </li>
+        {% endif %}
+        {# Post-collection events (child returns, desk returns and the loan void) merged oldest-first so the timeline stays chronological. #}
+        {% for ev in slip_events %}
+        {% if ev.type == "child_return" %}
+        {% with ret=ev.ret %}
+        <li class="timeline-item">
+            <span class="timeline-dot {% if ret.is_voided %}timeline-dot-danger{% else %}timeline-dot-success{% endif %}"></span>
+            <div class="timeline-body">
+                <span class="timeline-title">Returned{% if ret.is_voided %} &middot; voided{% endif %}</span>
+                <span class="timeline-meta">
+                    {% if ret.is_returned %}{{ ret.returned_at|date:"D d M Y, H:i" }}{% else %}{{ ret.created_at|date:"D d M Y, H:i" }}{% endif %} &middot; {{ ret.person_name|default:ret.user.username }}{{ ret.user|admin_suffix }}{% if ret.decided_at and ret.approval_status == "approved" %} &middot; Approved by {{ ret.decided_by_name }}{{ ret.decided_by|admin_suffix }}{% endif %}{% if ret.reference_code %} &middot; {{ ret.reference_code }}{% endif %}
+                </span>
+                {% for rline in ret.items.all %}
+                <span class="timeline-meta timeline-meta-sub">{{ rline.quantity }} x {{ rline.item.name }}{% if rline.condition %} &middot; {{ rline.condition.name }}{% endif %}</span>
+                {% endfor %}
+                {% if ret.is_voided %}
+                <span class="timeline-meta timeline-meta-sub">
+                    Voided{% if ret.voided_at %} &middot; {{ ret.voided_at|date:"D d M Y, H:i" }}{% endif %}{% if ret.voided_by_name %} &middot; {{ ret.voided_by_name }}{{ ret.voided_by|admin_suffix }}{% endif %}{% if ret.voided_reason %} &middot; {{ ret.voided_reason }}{% endif %}
+                </span>
+                {% else %}
+                <form method="post" action="{% url 'inventory:request_void' ret.pk %}" class="void-form void-form-inline">
+                    {% csrf_token %}
+                    <input type="text" name="reason" class="void-reason" placeholder="Reason (optional)">
+                    <button type="submit" class="button-link danger btn-sm"
+                            onclick="return confirm('Void this return only? Its units go back out and the loan reopens. Recorded for audit.');">
+                        Void return
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </li>
+        {% endwith %}
+        {% elif ev.type == "desk_return" %}
+        {% with dret=ev.dret %}
+        <li class="timeline-item">
+            <span class="timeline-dot {% if dret.is_voided %}timeline-dot-danger{% else %}timeline-dot-success{% endif %}"></span>
+            <div class="timeline-body">
+                <span class="timeline-title">Returned{% if dret.is_voided %} &middot; voided{% endif %}</span>
+                <span class="timeline-meta">{{ dret.created_at|date:"D d M Y, H:i" }} &middot; {{ dret.person_name|default:dret.user.username }}{{ dret.user|admin_suffix }}{% if dret.decided_by_name %} &middot; Checked in by {{ dret.decided_by_name }}{{ dret.decided_by|admin_suffix }}{% endif %}</span>
+                <span class="timeline-meta timeline-meta-sub">{{ dret.quantity }} x {{ dret.item.name }}{% if dret.condition %} &middot; {{ dret.condition.name }}{% endif %}</span>
+                {% if dret.is_voided %}
+                <span class="timeline-meta timeline-meta-sub">
+                    Voided{% if dret.voided_at %} &middot; {{ dret.voided_at|date:"D d M Y, H:i" }}{% endif %}{% if dret.voided_by_name %} &middot; {{ dret.voided_by_name }}{{ dret.voided_by|admin_suffix }}{% endif %}{% if dret.voided_reason %} &middot; {{ dret.voided_reason }}{% endif %}
+                </span>
+                {% else %}
+                <form method="post" action="{% url 'inventory:transaction_void' dret.pk %}" class="void-form void-form-inline">
+                    {% csrf_token %}
+                    <input type="text" name="reason" class="void-reason" placeholder="Reason (optional)">
+                    <button type="submit" class="button-link danger btn-sm"
+                            onclick="return confirm('Void this return only? Its units go back out and the loan reopens. Recorded for audit.');">
+                        Void return
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </li>
+        {% endwith %}
+        {% elif ev.type == "loan_voided" %}
+        <li class="timeline-item">
+            <span class="timeline-dot timeline-dot-danger"></span>
+            <div class="timeline-body">
+                <span class="timeline-title">Loan voided</span>
+                <span class="timeline-meta">
+                    {% if slip.voided_at %}{{ slip.voided_at|date:"D d M Y, H:i" }}{% endif %}{% if slip.voided_by_name %} &middot; {{ slip.voided_by_name }}{{ slip.voided_by|admin_suffix }}{% endif %}
+                    {% if slip.voided_reason %}<br>{{ slip.voided_reason }}{% endif %}
+                </span>
+            </div>
+        </li>
+        {% elif ev.type == "legacy_return" %}
+        <li class="timeline-item">
+            <span class="timeline-dot timeline-dot-success"></span>
+            <div class="timeline-body">
+                <span class="timeline-title">Returned</span>
+                <span class="timeline-meta">{{ slip.returned_at|date:"D d M Y, H:i" }}{% if slip.returned_by_name %} &middot; {{ slip.returned_by_name }}{{ slip.returned_by|admin_suffix }}{% endif %}</span>
+            </div>
+        </li>
+        {% endif %}
+        {% endfor %}
+    </ul>
+
+    <hr class="divider">
+
+    <div class="actions-block">
+        <h3>Actions</h3>
+        <p class="section-note">Approve, reject, hand over, edit or void the loan. Each return is voided on its own from the history above.</p>
+        {% if slip.is_voided %}
+            <p class="message error">This loan has been voided. Voiding cannot be undone, but you can still view the history above and void any returns individually.</p>
+        {% else %}
+            <div class="actions actions-inline wrap">
+                {% if slip.approval_status == "pending" %}
+                    <form method="post" action="{% url 'inventory:request_approve' slip.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="button-link btn-sm">Approve</button>
+                    </form>
+                    <form method="post" action="{% url 'inventory:request_reject' slip.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="button-link secondary btn-sm">Reject</button>
+                    </form>
+                {% elif slip.approval_status == "approved" and slip.transaction_type == "book_ahead" and not slip.is_handed_over %}
+                    <form method="post" action="{% url 'inventory:request_hand_over' slip.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="button-link btn-sm">Hand over</button>
+                    </form>
+                {% endif %}
+                <a class="button-link secondary btn-sm" href="{% url 'inventory:request_edit' slip.pk %}">Edit</a>
+            </div>
+
+            <form method="post" action="{% url 'inventory:request_void' slip.pk %}" class="void-form">
+                {% csrf_token %}
+                <div class="field-input-group">
+                    <label class="label" for="void-reason">Void this loan</label>
+                    <textarea id="void-reason" name="reason" rows="2" placeholder="Reason for voiding (optional, recorded for audit)"></textarea>
+                </div>
+                <div class="actions">
+                    <button type="submit" class="button-link danger btn-sm"
+                            onclick="return confirm('Void the loan only? Only the loan stock is reversed and this is recorded for audit. Returns are voided separately from the history.');">
+                        Void loan
+                    </button>
+                </div>
+            </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

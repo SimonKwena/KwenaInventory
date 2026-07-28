@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% load inventory_extras %}
+
+{% block title %}Requests | Kwena Gear Room{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <div class="action-bar">
+            <div>
+                <h2>Pending requests</h2>
+                <p class="section-note">
+                    Book-aheads, check-outs and check-ins raised by members. Stock only
+                    moves once you approve a request.
+                </p>
+            </div>
+            <span class="pill {% if pending_count %}pill-danger{% else %}pill-neutral{% endif %}">
+                {{ pending_count }} waiting
+            </span>
+        </div>
+
+        <div class="table-wrapper" data-region="pending-requests">
+            {% if pending_requests %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Requested</th>
+                            <th>Type</th>
+                            <th>Item(s)</th>
+                            <th>Member</th>
+                            <th>Pickup / Return</th>
+                            <th class="col-actions">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for req in pending_requests %}
+                            <tr>
+                                <td>{{ req.created_at|date:"D d M, H:i" }}</td>
+                                <td>
+                                    <span class="pill pill-neutral">{{ req.transaction_type|title|cut:"_" }}</span>
+                                </td>
+                                <td>
+                                    {% for line in req.items.all %}
+                                        <div>{{ line.quantity }} &times; {{ line.item.name }}</div>
+                                    {% endfor %}
+                                </td>
+                                <td>{{ req.person_name|default:req.user.username }}</td>
+                                <td>
+                                    {% if req.taken_at %}Pickup {{ req.taken_at|date:"D d M, H:i" }}<br>{% endif %}
+                                    {% if req.expected_return %}Return {{ req.expected_return|date:"D d M, H:i" }}{% endif %}
+                                    {% if not req.taken_at and not req.expected_return %}<span class="section-note">Not set</span>{% endif %}
+                                </td>
+                                <td class="col-actions">
+                                    <div class="actions actions-inline">
+                                        <a class="button-link secondary btn-sm" href="{% url 'inventory:request_edit' req.pk %}">Edit</a>
+                                        <form method="post" action="{% url 'inventory:request_approve' req.pk %}" data-live-submit>
+                                            {% csrf_token %}
+                                            <button type="submit" class="button-link btn-sm">Approve</button>
+                                        </form>
+                                        <form method="post" action="{% url 'inventory:request_reject' req.pk %}" data-live-submit>
+                                            {% csrf_token %}
+                                            <button type="submit" class="button-link secondary btn-sm">Reject</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="section-note">No requests waiting for approval.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="action-bar">
+            <div>
+                <h2>All requests</h2>
+                    <p class="section-note">
+                        Every request raised by members &mdash; book-aheads, check-outs and
+                        check-ins. Approved book-aheads are held as reservations until the
+                        member picks the gear up &mdash; use <strong>Hand over</strong> at the
+                        counter to release the stock when they collect it.
+                    </p>
+            </div>
+            <form class="search-form" method="get" action="{% url 'inventory:requests' %}">
+                <input
+                    type="search"
+                    name="q"
+                    value="{{ search }}"
+                    placeholder="Search by member, slip, item or status"
+                    aria-label="Search requests"
+                >
+                <button type="submit" class="button-link btn-sm">Search</button>
+                {% if search %}
+                    <a class="button-link secondary btn-sm" href="{% url 'inventory:requests' %}">Clear</a>
+                {% endif %}
+            </form>
+        </div>
+
+        <div class="table-wrapper" data-region="all-requests">
+            {% if slips %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Slip</th>
+                            <th>Member</th>
+                            <th>Type</th>
+                            <th>Item(s)</th>
+                            <th>Requested</th>
+                            <th>Status</th>
+                            <th class="col-actions">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for slip in slips %}
+                            <tr>
+                                <td><span class="pill pill-neutral">{{ slip.reference_code|default:"&mdash;" }}</span></td>
+                                <td>{{ slip.person_name|default:slip.user.username }}</td>
+                                <td>
+                                    <span class="pill pill-neutral">{{ slip.transaction_type|type_label }}</span>
+                                </td>
+                                <td>
+                                    {% for line in slip.items.all %}
+                                        <div>{{ line.quantity }} &times; {{ line.item.name }}</div>
+                                    {% endfor %}
+                                </td>
+                                <td>{{ slip.created_at|date:"D d M, H:i" }}</td>
+                                <td><span class="pill {{ slip.slip_pill }}">{{ slip.slip_label }}</span></td>
+                                <td class="col-actions">
+                                    <a class="button-link secondary btn-sm" href="{% url 'inventory:request_slip' slip.slip_code %}">View</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="section-note">
+                    {% if search %}No requests match &ldquo;{{ search }}&rdquo;.{% else %}No requests recorded yet.{% endif %}
+                </p>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

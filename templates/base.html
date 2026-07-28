@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Kwena Music{% endblock %}</title>
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}?v=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/site.css' %}?v=41">
+    <script defer src="{% static 'js/vendor/jsQR.min.js' %}?v=1"></script>
+    <script defer src="{% static 'js/site.js' %}?v=43"></script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="container">
+        {% block topbar %}
+        <header class="topbar" id="topbar">
+            <div class="topbar-inner">
+                <a class="auth-brand" href="{% if request.user.is_authenticated and user_role == ROLE_TEACHER %}{% url 'inventory:teacher_home' %}{% else %}{% url 'inventory:home' %}{% endif %}" aria-label="Kwena Music Inventory home">
+                    <img class="auth-brand-logo" src="{% static 'images/kwena-logo.png' %}" alt="Kwena Music">
+                    <span class="auth-brand-name">Inventory</span>
+                </a>
+                {% if request.user.is_authenticated %}
+                    <button class="nav-toggle" id="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-menu" aria-label="Toggle menu">
+                        <span></span><span></span><span></span>
+                    </button>
+                    <nav class="nav-menu" id="nav-menu" aria-label="Primary">
+                        <div class="nav-buttons">
+                            {% if request.user.is_staff %}
+                                <div class="nav-links">
+                                    {% if request.user.is_superuser or user_role == "admin" %}
+                                    <a class="nav-link {% if request.path == '/inventory/dashboard/' %}is-active{% endif %}" href="{% url 'inventory:dashboard' %}">Dashboard</a>
+                                    {% endif %}
+                                    {% if user_role == "staff" %}
+                                    <a class="nav-link {% if request.path == '/inventory/staff/' %}is-active{% endif %}" href="{% url 'inventory:staff_home' %}">Staff desk</a>
+                                    {% endif %}
+                                    <a class="nav-link {% if request.path == '/inventory/catalog/' %}is-active{% endif %}" href="{% url 'inventory:catalog' %}">Browse Items</a>
+                                    <div class="nav-dropdown" id="manage-dropdown">
+                                        <button type="button" class="nav-link nav-dropdown-toggle {% if '/inventory/items/' in request.path or '/inventory/maintenance/' in request.path or request.path == '/inventory/announcements/' or request.path == '/inventory/requests/' or request.path == '/inventory/admin/users/' %}is-active{% endif %}" id="manage-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="manage-menu">
+                                             Manage
+                                             <span class="chevron" aria-hidden="true"></span>
+                                         </button>
+                                         <div class="nav-dropdown-menu" id="manage-menu" role="menu" aria-labelledby="manage-toggle" hidden>
+                                               {% if user_role == "admin" or user_role == "superadmin" %}
+                                               <a class="nav-dropdown-link {% if '/inventory/items/' in request.path %}is-active{% endif %}" href="{% url 'inventory:item_list' %}" role="menuitem">Items</a>
+                                               <a class="nav-dropdown-link {% if request.path == '/inventory/announcements/' %}is-active{% endif %}" href="{% url 'inventory:announcements' %}" role="menuitem">Updates</a>
+                                                  {% if request.user.is_superuser %}
+                                               <a class="nav-dropdown-link {% if request.path == '/inventory/admin/users/' %}is-active{% endif %}" href="{% url 'admin_users' %}" role="menuitem">Users</a>
+                                                  {% endif %}
+                                               {% endif %}
+                                              <a class="nav-dropdown-link {% if '/inventory/maintenance/' in request.path %}is-active{% endif %}" href="{% url 'inventory:maintenance' %}" role="menuitem">Maintenance</a>
+                                              <a class="nav-dropdown-link {% if request.path == '/inventory/requests/' %}is-active{% endif %}" href="{% url 'inventory:requests' %}" role="menuitem">
+                                                      Requests{% if pending_request_count %}<span class="nav-badge nav-badge-sm" data-nav-badge="pending">{{ pending_request_count }}</span>{% else %}<span class="nav-badge nav-badge-sm" data-nav-badge="pending" hidden></span>{% endif %}
+                                                  </a>
+                                         </div>
+                                    </div>
+                                </div>
+                            {% elif is_teacher %}
+                                <div class="nav-links">
+                                    <a class="nav-link {% if request.path == '/inventory/teacher/' %}is-active{% endif %}" href="{% url 'inventory:teacher_home' %}">Home</a>
+                                    <a class="nav-link {% if request.path == '/inventory/catalog/' %}is-active{% endif %}" href="{% url 'inventory:catalog' %}">Browse Items</a>
+                                    <a class="nav-link {% if '/inventory/maintenance/' in request.path %}is-active{% endif %}" href="{% url 'inventory:maintenance' %}">Maintenance</a>
+                                </div>
+                            {% else %}
+                                <div class="nav-links">
+                                    <a class="nav-link {% if request.path == '/inventory/' %}is-active{% endif %}" href="{% url 'inventory:home' %}">Home</a>
+                                    <a class="nav-link {% if request.path == '/inventory/catalog/' %}is-active{% endif %}" href="{% url 'inventory:catalog' %}">Browse Items</a>
+                                </div>
+                            {% endif %}
+                            <div class="nav-account">
+                                <div class="account-dropdown" id="account-dropdown">
+                                    <button type="button" class="user-chip" id="account-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu">
+                                        <span class="avatar">{{ request.user.username|first|upper }}</span>
+                                        <span class="user-name">{{ request.user.username }}</span>
+                                        {% if unread_notification_count %}
+                                            <span class="nav-badge" aria-label="{{ unread_notification_count }} unread notifications" data-nav-badge="unread">{{ unread_notification_count }}</span>
+                                        {% else %}
+                                            <span class="nav-badge" aria-label="0 unread notifications" data-nav-badge="unread" hidden></span>
+                                        {% endif %}
+                                        <span class="chevron" aria-hidden="true"></span>
+                                    </button>
+                                    <div class="account-menu" id="account-menu" role="menu" aria-labelledby="account-toggle" hidden>
+                                        <div class="account-menu-head">
+                                            <span class="avatar lg">{{ request.user.username|first|upper }}</span>
+                                            <span class="account-meta">
+                                                <span class="account-name">{{ request.user.username }}</span>
+                                                <span class="account-role">{{ user_role_label }}</span>
+                                            </span>
+                                        </div>
+                                        <div class="account-menu-items">
+                                            <a class="account-menu-link" href="{% url 'inventory:account' %}" role="menuitem">
+                                                <svg class="account-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-7 2-7 5v1h14v-1c0-3-3-5-7-5Z"/></svg>
+                                                <span>My account</span>
+                                            </a>
+                                            <a class="account-menu-link" href="{% url 'inventory:account' %}#notifications" role="menuitem">
+                                                <svg class="account-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6-2-2v-4a5 5 0 0 0-4-4.9V4a1 1 0 1 0-2 0v1.1A5 5 0 0 0 7 10v4l-2 2v1h14v-1Z"/></svg>
+                                                <span class="account-menu-label">Notifications</span>
+                                                {% if unread_notification_count %}
+                                                    <span class="nav-badge nav-badge-sm" data-nav-badge="unread">{{ unread_notification_count }}</span>
+                                                {% else %}
+                                                    <span class="nav-badge nav-badge-sm" data-nav-badge="unread" hidden></span>
+                                                {% endif %}
+                                            </a>
+                                        </div>
+                                        <div class="account-menu-divider" role="separator"></div>
+                                        <div class="account-menu-items">
+                                            <a class="account-menu-link account-menu-danger" href="{% url 'inventory:local_logout' %}" role="menuitem">
+                                                <svg class="account-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 17v1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1h2v3h-2v3h2v3h-2ZM10 8v8H8V8h2Zm4 0v8h-2V8h2Z"/></svg>
+                                                <span>Sign out</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </nav>
+                {% else %}
+                    <a class="auth-home" href="{% url 'inventory:home' %}">
+                        <span aria-hidden="true">&#8592;</span> Home
+                    </a>
+                {% endif %}
+            </div>
+        </header>
+        {% endblock %}
+        {% if messages %}
+        <div class="message-bar" id="message-bar" role="status" aria-live="polite">
+            {% for message in messages %}
+            <div class="message {% if message.tags %}{{ message.tags }}{% endif %}">
+                <span class="message-icon"></span>
+                <span class="message-text">{{ message }}</span>
+                <button type="button" class="message-close" aria-label="Dismiss message">&times;</button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <main id="main">
+            {% block content %}{% endblock %}
+        </main>
+        <footer class="site-footer">
+            Kwena Music &middot; Gear, in and out &middot; Made by Simon
+        </footer>
+    </div>
+</body>
+</html>

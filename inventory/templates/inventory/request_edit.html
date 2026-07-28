@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit request | Kwena Gear Room{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="action-bar">
+        <div>
+            <h2>Edit request</h2>
+            <p class="section-note">
+                Update the details before approving or rejecting. No stock moves until you approve.
+                Requested by <strong>{{ req.person_name|default:req.user.username }}</strong> on {{ req.created_at|date:"D d M, H:i" }}.
+                {% if req.reference_code %}Slip <strong>{{ req.reference_code }}</strong>.{% endif %}
+            </p>
+        </div>
+        <div class="actions">
+            <a class="button-link secondary" href="{% url 'inventory:requests' %}">Back to requests</a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <form method="post" action="{% url 'inventory:request_edit' req.pk %}">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="message error">{% for e in form.non_field_errors %}<span>{{ e }}</span>{% endfor %}</div>
+        {% endif %}
+
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.transaction_type.id_for_label }}">{{ form.transaction_type.label }}</label>
+                {{ form.transaction_type }}
+                {{ form.transaction_type.errors }}
+            </div>
+            <div class="field-input-group">
+                <label class="label" for="{{ form.approval_status.id_for_label }}">{{ form.approval_status.label }}</label>
+                {{ form.approval_status }}
+                {{ form.approval_status.errors }}
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.item.id_for_label }}">{{ form.item.label }}</label>
+                {{ form.item }}
+                {{ form.item.errors }}
+            </div>
+        </div>
+
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.quantity.id_for_label }}">{{ form.quantity.label }}</label>
+                {{ form.quantity }}
+                {{ form.quantity.errors }}
+            </div>
+            <div class="field-input-group">
+                <label class="label" for="{{ form.location.id_for_label }}">{{ form.location.label }}</label>
+                {{ form.location }}
+                {{ form.location.errors }}
+            </div>
+        </div>
+
+        <div class="form-row form-row-half">
+            <div class="field-input-group condition-field">
+                <label class="label" for="{{ form.condition.id_for_label }}">{{ form.condition.label }}</label>
+                {{ form.condition }}
+                {{ form.condition.errors }}
+            </div>
+            <div class="field-input-group">
+                <label class="label" for="{{ form.expected_return.id_for_label }}">{{ form.expected_return.label }}</label>
+                {{ form.expected_return }}
+                {{ form.expected_return.errors }}
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.taken_at.id_for_label }}">{{ form.taken_at.label }}</label>
+                {{ form.taken_at }}
+                {{ form.taken_at.errors }}
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+                {{ form.notes }}
+                {{ form.notes.errors }}
+            </div>
+        </div>
+
+        <div class="actions">
+            <button type="submit" class="button-link">Save changes</button>
+            <a class="button-link secondary" href="{% url 'inventory:requests' %}">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        var typeSelect = document.querySelector('select[name="transaction_type"]');
+        var conditionField = document.querySelector('.condition-field');
+        if (typeSelect && conditionField) {
+            function toggleCondition() {
+                // Book-ahead reservations and check-outs assume working
+                // gear, so hide Condition for them; only check-ins capture it.
+                conditionField.style.display =
+                    (typeSelect.value === 'book_ahead' || typeSelect.value === 'check_out') ? 'none' : '';
+            }
+            typeSelect.addEventListener('change', toggleCondition);
+            toggleCondition();
+        }
+    })();
+</script>
+{% endblock %}

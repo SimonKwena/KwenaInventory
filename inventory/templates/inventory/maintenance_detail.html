@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+
+{% block title %}Maintenance submission | Kwena Gear Room{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <div class="action-bar">
+            <div>
+                <h2>Maintenance submission</h2>
+                <p class="section-note">{{ record.item.name }} &middot; {{ record.quantity }} unit{{ record.quantity|pluralize }} reported by {{ record.reported_by_name|default:record.reported_by.username|default:"&mdash;" }}</p>
+            </div>
+            <div class="actions">
+                <a class="button-link secondary" href="{% url 'inventory:maintenance' %}">Back to maintenance</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Details</h3>
+        {% if record.completed_at %}
+            {% if record.outcome == "written_off" %}
+                <span class="pill pill-danger">Could not be fixed</span>
+            {% else %}
+                <span class="pill pill-success">Returned</span>
+            {% endif %}
+        {% elif record.is_overdue %}
+            <span class="pill pill-danger">Overdue</span>
+        {% else %}
+            <span class="pill pill-pending">In service</span>
+        {% endif %}
+
+        <ol class="timeline">
+            <li class="timeline-step is-done">
+                <div class="timeline-body">
+                    <h4>Reported for maintenance</h4>
+                    <p class="section-note">{{ record.started_at|date:"d M Y, H:i" }}</p>
+                    {% if record.reason %}<p>{{ record.reason }}</p>{% endif %}
+                </div>
+            </li>
+            {% if record.expected_return %}
+            <li class="timeline-step {% if record.completed_at or record.is_overdue %}is-done{% else %}is-pending{% endif %}">
+                <div class="timeline-body">
+                    <h4>Expected back</h4>
+                    <p class="section-note">{{ record.expected_return|date:"d M Y" }}{% if record.is_overdue %} &middot; overdue{% endif %}</p>
+                </div>
+            </li>
+            {% endif %}
+            {% if record.completed_at %}
+            <li class="timeline-step is-done">
+                <div class="timeline-body">
+                    <h4>{% if record.outcome == "written_off" %}Could not be fixed{% else %}Returned to stock{% endif %}</h4>
+                    <p class="section-note">{{ record.completed_at|date:"d M Y, H:i" }} by {{ record.completed_by_name|default:record.completed_by.username|default:"&mdash;" }}</p>
+                </div>
+            </li>
+            {% endif %}
+            {% if record.notes %}
+            <li class="timeline-step is-done">
+                <div class="timeline-body">
+                    <h4>Update from the gear room</h4>
+                    <p>{{ record.notes }}</p>
+                </div>
+            </li>
+            {% endif %}
+        </ol>
+
+        <dl class="detail-list">
+            <div class="detail-row">
+                <dt>Item</dt>
+                <dd><a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a></dd>
+            </div>
+            <div class="detail-row">
+                <dt>Quantity</dt>
+                <dd>{{ record.quantity }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Location</dt>
+                <dd>{% with loc=record.location|default:record.item.location %}{{ loc.name|default:"&mdash;" }}{% endwith %}</dd>
+            </div>
+            {% if record.completed_at %}
+            <div class="detail-row">
+                <dt>Outcome</dt>
+                <dd>{% if record.outcome == "written_off" %}Could not be fixed{% else %}Returned{% endif %}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Closed by</dt>
+                <dd>{{ record.completed_by_name|default:record.completed_by.username|default:"&mdash;" }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+    </div>
+
+    {% if is_staff %}
+    <div class="card">
+        <h3>Manage this job</h3>
+        <p class="section-note">Close out this maintenance record.</p>
+        <form method="post" action="{% url 'inventory:maintenance_complete' record.pk %}" data-live-submit>
+            {% csrf_token %}
+            <div class="form-row form-row-half">
+                <div>
+                    <label class="label" for="id-notes">Notes</label>
+                    <input type="text" name="notes" id="id-notes" class="text-input" value="{{ record.notes }}" placeholder="Notes (optional)">
+                </div>
+                <div class="actions">
+                    <button type="submit" class="button-link btn-sm manage-return" data-action="return">Return</button>
+                    <button type="submit" formaction="{% url 'inventory:maintenance_write_off' record.pk %}" class="button-link danger btn-sm manage-writeoff" data-action="writeoff" data-item-name="{{ record.item.name }}">Could not be fixed</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+{% endblock %}

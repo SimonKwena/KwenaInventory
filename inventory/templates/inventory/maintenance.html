@@ -1,0 +1,227 @@
+{% extends 'base.html' %}
+
+{% block title %}Maintenance | Kwena Gear Room{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <div class="action-bar">
+            <div>
+                <h2>Maintenance</h2>
+                {% if is_staff %}
+                <p class="section-note">Track gear out for repair or servicing, manage open jobs, and return or write off items when done.</p>
+                <div class="stat-grid" data-region="maintenance-stats">
+                    <div class="stat"><div class="stat-value">{{ total_in_maintenance }}</div><div class="stat-label">Items out for service</div></div>
+                </div>
+                {% else %}
+                <p class="section-note">Send gear out for repair or servicing and follow the status of the items you reported.</p>
+                {% endif %}
+            </div>
+        <div class="actions">
+            {% if is_staff %}
+            <button type="button" class="button-link secondary" id="toggle-manage-items" aria-expanded="false" aria-controls="manage-maintenance-items">Manage items</button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if is_staff %}
+<div class="card" id="manage-maintenance-items" data-region="manage-maintenance" style="display:none;">
+    <h3>Manage items in maintenance</h3>
+    <p class="section-note">Close out each open job. <strong>Return</strong> puts the units back into available stock once fixed; <strong>Could not be fixed</strong> writes the units off (removed from total stock). Both record who closed the job and any notes.</p>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr><th>Item</th><th>Qty</th><th>Location</th><th>Reported by</th><th>Expected back</th><th>Reason</th><th>Notes</th><th>Actions</th></tr>
+            </thead>
+                <tbody>
+                    {% for record in open_records %}
+                    <tr>
+                        <td>
+                            <a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a>
+                        </td>
+                        <td>{{ record.quantity }}</td>
+                        <td>{% with loc=record.location|default:record.item.location %}{{ loc.name|default:"&mdash;" }}{% endwith %}</td>
+                        <td>{% if record.reported_by %}{{ record.reported_by_name|default:record.reported_by.username }}{% else %}&mdash;{% endif %}</td>
+                        <td>
+                            {% if record.expected_return %}
+                                {{ record.expected_return }}
+                            {% else %}
+                                &mdash;
+                            {% endif %}
+                        </td>
+                        <td>{{ record.reason|default:"&mdash;" }}</td>
+                        <td class="manage-notes-cell">
+                                <form method="post" action="{% url 'inventory:maintenance_complete' record.pk %}" class="manage-record-form" id="manage-form-{{ record.pk }}" data-live-submit>
+                                {% csrf_token %}
+                                <input type="text" name="notes" class="text-input text-input-sm" placeholder="Notes (optional)">
+                            </form>
+                        </td>
+                        <td class="actions-cell manage-actions-cell">
+                            <span class="actions-inner">
+                                <button type="submit" form="manage-form-{{ record.pk }}" formaction="{% url 'inventory:maintenance_complete' record.pk %}" class="button-link btn-sm manage-return" data-action="return">Return</button>
+                                <button type="submit" form="manage-form-{{ record.pk }}" formaction="{% url 'inventory:maintenance_write_off' record.pk %}" class="button-link danger btn-sm manage-writeoff" data-action="writeoff" data-item-name="{{ record.item.name }}">Could not be fixed</button>
+                            </span>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="8">No items currently in maintenance.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h3>Recently returned / written off</h3>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr><th>Item</th><th>Qty</th><th>Location</th><th>Outcome</th><th>Closed</th><th>By</th><th>Notes</th></tr>
+            </thead>
+                <tbody>
+                    {% for record in completed_records %}
+                    <tr>
+                        <td>
+                            <a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a>
+                        </td>
+                        <td>{{ record.quantity }}</td>
+                        <td>{% with loc=record.location|default:record.item.location %}{{ loc.name|default:"&mdash;" }}{% endwith %}</td>
+                        <td>
+                            {% if record.outcome == "written_off" %}
+                                <span class="pill pill-danger">Could not be fixed</span>
+                            {% else %}
+                                <span class="pill pill-success">Returned</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ record.completed_at }}</td>
+                        <td>{% if record.completed_by %}{{ record.completed_by_name|default:record.completed_by.username }}{% else %}&mdash;{% endif %}</td>
+                        <td>{{ record.notes|default:"&mdash;" }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="7">No items returned from maintenance yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="actions" style="margin-top:16px;">
+        <button type="button" class="button-link secondary" id="close-manage-items">Close</button>
+    </div>
+</div>
+{% endif %}
+
+{% if not is_staff %}
+<div class="card">
+    <h3>My maintenance submissions</h3>
+    <p class="section-note">Items you've reported for repair or servicing, and their current status.</p>
+    {% if open_records or completed_records %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr><th>Item</th><th>Qty</th><th>Status</th><th>Reported</th><th>Expected back</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for record in open_records %}
+                <tr>
+                    <td><a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a></td>
+                    <td>{{ record.quantity }}</td>
+                    <td>
+                        {% if record.is_overdue %}
+                            <span class="pill pill-danger">Overdue</span>
+                        {% else %}
+                            <span class="pill pill-pending">In service</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ record.started_at|date:"d M Y" }}</td>
+                    <td>{% if record.expected_return %}{{ record.expected_return|date:"d M Y" }}{% else %}&mdash;{% endif %}</td>
+                    <td class="actions-cell"><a class="button-link btn-sm" href="{% url 'inventory:maintenance_detail' record.pk %}">View</a></td>
+                </tr>
+                {% endfor %}
+                {% for record in completed_records %}
+                <tr>
+                    <td><a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a></td>
+                    <td>{{ record.quantity }}</td>
+                    <td>
+                        {% if record.outcome == "written_off" %}
+                            <span class="pill pill-danger">Could not be fixed</span>
+                        {% else %}
+                            <span class="pill pill-success">Returned</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ record.started_at|date:"d M Y" }}</td>
+                    <td>{% if record.expected_return %}{{ record.expected_return|date:"d M Y" }}{% else %}&mdash;{% endif %}</td>
+                    <td class="actions-cell"><a class="button-link btn-sm" href="{% url 'inventory:maintenance_detail' record.pk %}">View</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="section-note">You haven't reported any items for maintenance yet.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+    <h3>Send an item to maintenance</h3>
+    <p class="section-note">Scan the QR code or pick the item, set how many units are going out for service, and add a note. This takes the units out of available stock until they're returned.</p>
+    <form method="post" action="{% url 'inventory:maintenance_start' %}" id="maintenance-form">
+        {% csrf_token %}
+
+        <div class="form-row">
+            <div class="field-input-group">
+                <label class="label" for="maintenance-scan-asset">Asset tag / SKU</label>
+                <div class="field-input-row">
+                    <input type="text" name="asset_tag" id="maintenance-scan-asset" placeholder="Enter SKU or scan with camera">
+                    <button type="button" id="clear-maintenance-asset" class="button-link clear-button">Clear</button>
+                </div>
+            </div>
+            <div>
+                <button type="button" id="camera-scan-maintenance" class="button-link secondary">Open camera scan</button>
+            </div>
+        </div>
+
+        <div class="card card-light" id="maintenance-camera-panel" style="display:none;">
+            <video id="maintenance-scan-video" playsinline autoplay muted></video>
+            <p id="maintenance-scan-status" class="section-note">Allow camera access and point the QR code at the camera.</p>
+            <div class="form-row">
+                <button type="button" id="stop-camera-maintenance" class="button-link secondary">Stop camera</button>
+            </div>
+        </div>
+
+        <div class="form-row form-row-half">
+            <div>
+                <label class="label" for="id_item">Item <span class="required-star">*</span></label>
+                {{ form.item }}
+                {% if form.item.errors %}<ul class="errorlist">{% for error in form.item.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+                {% if form.asset_tag.errors %}<ul class="errorlist">{% for error in form.asset_tag.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+            </div>
+            <div>
+                <label class="label" for="id_location">Location <span class="required-star">*</span></label>
+                {{ form.location }}
+            </div>
+            <div>
+                <label class="label" for="id_quantity">Quantity <span class="required-star">*</span></label>
+                {{ form.quantity }}
+            </div>
+        </div>
+
+        <div class="form-row form-row-half">
+            <div>
+                <label class="label" for="id_expected_return">Expected back</label>
+                {{ form.expected_return }}
+            </div>
+            <div></div>
+        </div>
+
+        <div class="form-row">
+            <div>
+                <label class="label" for="id_reason">Issue / reason <span class="required-star">*</span></label>
+                {{ form.reason }}
+            </div>
+        </div>
+
+        <div class="actions">
+            <button type="submit" class="button-link">Send to maintenance</button>
+            <button type="button" id="clear-maintenance-form" class="button-link secondary">Clear form</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

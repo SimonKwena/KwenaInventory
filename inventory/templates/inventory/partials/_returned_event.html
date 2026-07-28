@@ -1,0 +1,5 @@
+{% load inventory_extras %}
+<li class="slip-doc-event slip-doc-event-success">
+    <span class="slip-doc-event-title">Returned</span>
+    <span class="slip-doc-event-meta">{% if event_req.returned_at %}{{ event_req.returned_at|date:"D d M Y, H:i" }}{% else %}{{ event_req.decided_at|date:"D d M Y, H:i" }}{% endif %}{% if return_name %} &middot; {{ return_name }}{{ return_user|admin_suffix }}{% endif %}{% if event_req.notes %} &middot; {{ event_req.notes }}{% endif %}</span>
+</li>

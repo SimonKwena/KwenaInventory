@@ -1,0 +1,119 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}{{ title }} | Django Administration{% endblock %}
+
+{% block content %}
+<div id="content" class="colM">
+    <h1>{{ title }}</h1>
+
+    <div class="users-toolbar">
+        <form method="get" class="users-search">
+            <input type="text" name="q" value="{{ query }}" placeholder="Search username, name or email…">
+            <button type="submit" class="button">Search</button>
+            {% if query %}<a href="{% url 'admin_users' %}" class="button">Clear</a>{% endif %}
+        </form>
+        <a href="{% url 'admin_user_create' %}" class="button addlink">Add user</a>
+    </div>
+
+    <div class="module">
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Staff</th>
+                    <th>Superuser</th>
+                    <th>Active</th>
+                    <th>Last login</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr class="{% if not u.is_active %}inactive{% endif %}">
+                    <td>{{ u.username }}</td>
+                    <td>{{ u.get_full_name|default:"—" }}</td>
+                    <td>{{ u.email|default:"—" }}</td>
+                    <td>{{ u.user_profile.role|default:"—"|title }}</td>
+                    <td>{% if u.is_staff %}&#10003;{% else %}&mdash;{% endif %}</td>
+                    <td>{% if u.is_superuser %}&#10003;{% else %}&mdash;{% endif %}</td>
+                    <td>{% if u.is_active %}&#10003;{% else %}&mdash;{% endif %}</td>
+                    <td>{{ u.last_login|date:"Y-m-d H:i"|default:"—" }}</td>
+                    <td class="row-actions">
+                        <a href="{% url 'admin_user_edit' u.pk %}" class="button">Edit</a>
+                        <form method="post" action="{% url 'admin_user_toggle_active' u.pk %}" class="inline-form">
+                            {% csrf_token %}
+                            <button type="submit" class="button {% if u.is_active %}deactivate{% else %}activate{% endif %}">
+                                {% if u.is_active %}Deactivate{% else %}Activate{% endif %}
+                            </button>
+                        </form>
+                        <form method="post" action="{% url 'admin_user_delete' u.pk %}" class="inline-form" onsubmit="return confirm('Delete user &quot;{{ u.username }}&quot;? This cannot be undone.');">
+                            {% csrf_token %}
+                            <button type="submit" class="button delete">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9">No users found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <br>
+    <a href="{% url 'admin:index' %}" class="button">&laquo; Back to admin</a>
+</div>
+
+<style>
+    .users-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin: 12px 0;
+        flex-wrap: wrap;
+    }
+    .users-search input[type="text"] {
+        padding: 6px 8px;
+        min-width: 280px;
+    }
+    .users-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .users-table th, .users-table td {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--hairline-color, #eee);
+        font-size: 13px;
+        vertical-align: middle;
+    }
+    .users-table th {
+        background: var(--darkened-bg, #f8f8f8);
+        border-bottom: 1px solid var(--hairline-color, #e0e0e0);
+    }
+    .users-table tr.inactive td {
+        color: var(--body-quiet-color, #999);
+        font-style: italic;
+    }
+    .row-actions {
+        white-space: nowrap;
+    }
+    .inline-form {
+        display: inline-block;
+        margin: 0;
+    }
+    .button.delete {
+        background: #ba2121;
+        color: #fff;
+        border-color: #ba2121;
+    }
+    .button.activate {
+        background: #417690;
+        color: #fff;
+        border-color: #417690;
+    }
+</style>
+{% endblock %}

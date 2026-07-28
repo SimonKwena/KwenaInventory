@@ -1,0 +1,132 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}{{ title }} | Django Administration{% endblock %}
+
+{% block content %}
+<div id="content" class="colM">
+    <h1>{{ title }}</h1>
+    <p class="help">Combined activity feed across transactions, requests, maintenance, updates and user accounts. Superuser only.</p>
+
+    <div class="log-toolbar">
+        <form method="get" class="log-search">
+            <input type="text" name="q" value="{{ query }}" placeholder="Search by name, item, note…">
+            <button type="submit" class="button">Search</button>
+            {% if query %}<a href="{% url 'admin_master_log' %}{% if selected_type %}?type={{ selected_type }}{% endif %}" class="button">Clear</a>{% endif %}
+        </form>
+        <div class="log-filters">
+            <a class="log-filter {% if not selected_type %}is-active{% endif %}" href="{% url 'admin_master_log' %}{% if query %}?q={{ query }}{% endif %}">All</a>
+            {% for slug, label in event_types %}
+                <a class="log-filter {% if selected_type == slug %}is-active{% endif %}" href="{% url 'admin_master_log' %}?type={{ slug }}{% if query %}&amp;q={{ query }}{% endif %}">{{ label }}</a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="module">
+        <table class="log-table">
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Who</th>
+                    <th>Type</th>
+                    <th>Action</th>
+                    <th>Detail</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in entries %}
+                <tr class="log-row log-row-{{ e.type }}">
+                    <td class="log-when">{{ e.when|date:"Y-m-d H:i" }}</td>
+                    <td class="log-who">{{ e.who|default:"—" }}</td>
+                    <td class="log-type"><span class="log-tag log-tag-{{ e.type }}">{{ e.type_label }}</span></td>
+                    <td class="log-action">{{ e.action }}</td>
+                    <td class="log-detail">{{ e.detail }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5">No activity recorded.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <p class="log-count">{{ total }} event{{ total|pluralize }} shown.</p>
+
+    <br>
+    <a href="{% url 'admin:index' %}" class="button">&laquo; Back to admin</a>
+</div>
+
+<style>
+    .log-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin: 12px 0;
+        flex-wrap: wrap;
+    }
+    .log-search input[type="text"] {
+        padding: 6px 8px;
+        min-width: 280px;
+    }
+    .log-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .log-filter {
+        padding: 5px 10px;
+        font-size: 12px;
+        border: 1px solid var(--hairline-color, #ccc);
+        border-radius: 4px;
+        text-decoration: none;
+        color: var(--body-fg, #333);
+    }
+    .log-filter.is-active {
+        background: #417690;
+        border-color: #417690;
+        color: #fff;
+    }
+    .log-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .log-table th, .log-table td {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--hairline-color, #eee);
+        font-size: 13px;
+        vertical-align: top;
+    }
+    .log-table th {
+        background: var(--darkened-bg, #f8f8f8);
+        border-bottom: 1px solid var(--hairline-color, #e0e0e0);
+        white-space: nowrap;
+    }
+    .log-when, .log-who {
+        white-space: nowrap;
+    }
+    .log-when {
+        font-variant-numeric: tabular-nums;
+        color: var(--body-quiet-color, #666);
+    }
+    .log-tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #fff;
+    }
+    .log-tag-transaction { background: #2b6cb0; }
+    .log-tag-request { background: #6b46c1; }
+    .log-tag-maintenance { background: #b7791f; }
+    .log-tag-announcement { background: #2f855a; }
+    .log-tag-user { background: #718096; }
+    .log-detail {
+        word-break: break-word;
+    }
+    .log-count {
+        color: var(--body-quiet-color, #666);
+        font-size: 12px;
+    }
+</style>
+{% endblock %}

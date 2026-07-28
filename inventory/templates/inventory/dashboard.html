@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin Dashboard | Kwena Gear Room{% endblock %}
+
+{% block content %}
+    <div class="stack-lg">
+        <div class="grid grid-2">
+            <div class="card">
+                <h3>Inventory summary</h3>
+                <p class="section-note">A full snapshot of stock, movement, and gear status.</p>
+                <div class="stat-grid" data-region="inventory-stats">
+                    <div class="stat"><div class="stat-value">{{ total_items }}</div><div class="stat-label">Total items</div></div>
+                    <div class="stat"><div class="stat-value">{{ total_available }}</div><div class="stat-label">Available</div></div>
+                    <div class="stat"><div class="stat-value">{{ total_out }}</div><div class="stat-label">Checked out</div></div>
+                    <div class="stat"><div class="stat-value">{{ maintenance_count }}</div><div class="stat-label">In maintenance</div></div>
+                    <div class="stat"><div class="stat-value {% if pending_request_count %}stat-danger{% endif %}">{{ pending_request_count }}</div><div class="stat-label">Pending approvals</div></div>
+                    <div class="stat"><div class="stat-value">{{ pending_count }}</div><div class="stat-label">Promised returns</div></div>
+                    <div class="stat"><div class="stat-value {% if overdue_count %}stat-danger{% endif %}">{{ overdue_count }}</div><div class="stat-label">Overdue</div></div>
+                    <div class="stat"><div class="stat-value">{{ location_count }}</div><div class="stat-label">Locations</div></div>
+                    <div class="stat"><div class="stat-value">{{ announcement_count }}</div><div class="stat-label">Updates posted</div></div>
+                </div>
+            </div>
+            <div class="card dashboard-side">
+                <h3>Items currently out &amp; promised returns</h3>
+                <div class="scroll-area table-wrapper" data-region="pending-returns">
+                    <table>
+                        <thead>
+                            <tr><th>Item</th><th>Member</th><th>Location</th><th>Out</th><th>Expected return</th><th>Status</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in pending_returns %}
+                                <tr>
+                                    <td>{{ entry.item.name }}</td>
+                                    <td>{{ entry.member }}</td>
+                                    <td>{{ entry.item.location.name }}</td>
+                                    <td>{{ entry.item.quantity_out }}</td>
+                                    <td>{{ entry.expected_return }}</td>
+                                    <td>{% if entry.overdue %}<span class="pill pill-danger">Overdue</span>{% else %}<span class="pill pill-neutral">Pending</span>{% endif %}</td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="6">No items currently checked out.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {% if show_quick_action %}
+            {% include "inventory/partials/quick_action.html" with is_admin_quick_action=True show_slip_input=True %}
+        {% endif %}
+    </div>
+    {% include "inventory/partials/slip_modal.html" %}
+{% endblock %}

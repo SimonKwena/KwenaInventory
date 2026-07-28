@@ -1,0 +1,33 @@
+{% comment %}Renders one Announcement as an engaging, styled card.
+Usage: {% include "inventory/partials/announcement_card.html" with update=announcement %}
+{% endcomment %}
+<article class="announcement announcement-{{ update.style }}{% if update.pinned %} is-pinned{% endif %}">
+    <span class="announcement-icon" aria-hidden="true">
+        {% if update.style == "event" %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="M8 14h3"/></svg>
+        {% elif update.style == "alert" %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4a1 1 0 0 0 1 1h2l4 4V5L7 9H5a1 1 0 0 0-1 1Z"/><path d="M16 9a3.5 3.5 0 0 1 0 6M18.5 6.5a7 7 0 0 1 0 11"/></svg>
+        {% elif update.style == "warning" %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.8 2.7 19.6A1.3 1.3 0 0 0 3.85 21.3h16.3a1.3 1.3 0 0 0 1.15-1.7L12 3.8Z"/><path d="M12 9.5v4.2"/><circle cx="12" cy="16.6" r="0.95" fill="currentColor" stroke="none"/></svg>
+        {% elif update.style == "maintenance" %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.2 5L4 17a2 2 0 0 0 3 3l5.7-5.5a4 4 0 0 0 5-5.2l-2.6 2.6-2.2-.5-.5-2.2 2.6-2.6Z"/></svg>
+        {% elif update.style == "closed" %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/><circle cx="12" cy="15" r="1.1" fill="currentColor" stroke="none"/></svg>
+        {% elif update.style == "success" %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.4 12.2 11 14.8l4.8-4.8"/></svg>
+        {% elif update.style == "reminder" %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1Z"/><path d="M9.5 9h5M9.5 12h5"/></svg>
+        {% else %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5a5.5 5.5 0 0 1 11 0c0 4 1.6 5.4 2 6H4.5c.4-.6 2-2 2-6Z"/><path d="M9.8 19.2a2.3 2.3 0 0 0 4.4 0"/></svg>
+        {% endif %}
+    </span>
+    <div class="announcement-content">
+        <div class="announcement-head">
+            {% if update.pinned %}<span class="announcement-pin" title="Pinned" aria-label="Pinned">&#9733;</span>{% endif %}
+            {% if update.title %}<span class="announcement-title">{{ update.title }}</span>{% endif %}
+            {% if update.style != "info" %}<span class="announcement-tag announcement-tag-{{ update.style }}">{{ update.get_style_display }}</span>{% endif %}
+            <span class="section-note announcement-time" data-time="{{ update.created_at|date:'c' }}">{{ update.created_at|date:"D d M, H:i" }}</span>
+        </div>
+        <p class="announcement-body">{{ update.message }}</p>
+    </div>
+</article>

@@ -1,0 +1,25 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}?v=1">
+{% endblock %}
+
+{% block branding %}
+<div id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></div>
+{% if user.is_anonymous %}
+  {% include "admin/color_theme_toggle.html" %}
+{% endif %}
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
+{% block userlinks %}
+    {{ block.super }}
+    {% if request.user.is_superuser %}<li><a href="{% url 'admin_users' %}" class="button">Users</a></li>{% endif %}
+    {% if request.user.is_superuser %}<li><a href="{% url 'admin_master_log' %}" class="button">Master Log</a></li>{% endif %}
+    <li><a href="{% url 'site_settings' %}" class="button">Django Settings</a></li>
+{% endblock %}

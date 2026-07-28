@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}Updates | Kwena Gear Room{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <div class="action-bar">
+            <div>
+            <h2>Updates</h2>
+            <p class="section-note">Post messages for students and manage what shows on their home page.</p>
+            </div>
+            <a class="button-link" href="{% url 'inventory:post_announcement' %}">+ New update</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Posted updates</h3>
+        <p class="section-note">Everything you've posted. Hidden or expired posts don't appear for students.</p>
+        <div class="table-wrapper" data-region="announcements-table">
+            <table>
+                <thead>
+                    <tr><th>Posted</th><th>Title / message</th><th>Style</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for update in announcements %}
+                        <tr>
+                            <td>{{ update.created_at|date:"D d M, H:i" }}</td>
+                            <td>
+                                {% if update.title %}<strong>{{ update.title }}</strong><br>{% endif %}
+                                {{ update.message }}
+                                {% if update.pinned %}<span class="pill pill-gold">Pinned</span>{% endif %}
+                                {% if update.visible_until %}<br><span class="section-note">Hides after {{ update.visible_until|date:"D d M, H:i" }}</span>{% endif %}
+                            </td>
+                            <td>
+                                <span class="announcement-style announcement-style-{{ update.style }}">{{ update.get_style_display }}</span>
+                            </td>
+                            <td>
+                                {% if update.is_visible %}
+                                    <span class="pill pill-success">Visible</span>
+                                {% else %}
+                                    <span class="pill pill-neutral">Hidden</span>
+                                {% endif %}
+                            </td>
+                            <td class="actions-cell">
+                                <form method="post" action="{% url 'inventory:announcement_pin' update.pk %}" data-live-submit>
+                                    {% csrf_token %}
+                                    <button type="submit" class="button-link secondary btn-sm">
+                                        {% if update.pinned %}Unpin{% else %}Pin{% endif %}
+                                    </button>
+                                </form>
+                                <a class="button-link secondary btn-sm" href="{% url 'inventory:announcement_edit' update.pk %}">Edit</a>
+                                <form method="post" action="{% url 'inventory:announcement_toggle' update.pk %}" data-live-submit>
+                                    {% csrf_token %}
+                                    <button type="submit" class="button-link secondary btn-sm">
+                                        {% if update.is_active %}Hide{% else %}Show{% endif %}
+                                    </button>
+                                </form>
+                                <form method="post" action="{% url 'inventory:announcement_delete' update.pk %}" data-live-submit>
+                                    {% csrf_token %}
+                                    <button type="submit" class="button-link danger btn-sm">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="5">No updates posted yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

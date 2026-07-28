@@ -1,0 +1,334 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My account | Kwena Gear Room{% endblock %}
+
+{% block content %}
+    <div class="card account-header">
+        <span class="avatar lg">{{ request.user.guest_profile.full_name|default:request.user.get_full_name|default:request.user.username|first|upper }}</span>
+        <div class="account-header-meta">
+            <h2>{{ request.user.guest_profile.full_name|default:request.user.get_full_name|default:request.user.username }}</h2>
+            <div class="account-header-tags">
+                <span class="pill pill-neutral">{{ user_role_label }}</span>
+                {% if overdue_items %}
+                    <span class="pill pill-danger">{{ overdue_items|length }} overdue</span>
+                {% endif %}
+            </div>
+        </div>
+        <a class="button-link" href="{% url 'inventory:account_edit' %}">Edit details</a>
+    </div>
+
+    <div class="grid grid-2">
+        <div class="card">
+            <h3>Profile details</h3>
+            <p class="section-note">How the gear room knows who you are.</p>
+            <dl class="detail-list">
+                {% if is_guest %}
+                    <div class="detail-row">
+                        <dt>Full name</dt>
+                        <dd>{{ guest_profile.full_name }}</dd>
+                    </div>
+                    <div class="detail-row">
+                        <dt>Email</dt>
+                        <dd>{% if guest_profile.email %}{{ guest_profile.email }}{% else %}<span class="section-note">Not provided</span>{% endif %}</dd>
+                    </div>
+                    <div class="detail-row">
+                        <dt>Phone</dt>
+                        <dd>{% if guest_profile.phone %}{{ guest_profile.phone }}{% else %}<span class="section-note">Not provided</span>{% endif %}</dd>
+                    </div>
+                    <div class="detail-row">
+                        <dt>Organization</dt>
+                        <dd>{% if guest_profile.organization %}{{ guest_profile.organization }}{% else %}<span class="section-note">Not provided</span>{% endif %}</dd>
+                    </div>
+                    <div class="detail-row">
+                        <dt>Purpose</dt>
+                        <dd>{% if guest_profile.notes %}{{ guest_profile.notes }}{% else %}<span class="section-note">Not provided</span>{% endif %}</dd>
+                    </div>
+                {% else %}
+                    <div class="detail-row">
+                        <dt>Username</dt>
+                        <dd>{{ request.user.username }}</dd>
+                    </div>
+                    <div class="detail-row">
+                        <dt>Name</dt>
+                        <dd>{% if request.user.first_name or request.user.last_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}</dd>
+                    </div>
+                    <div class="detail-row">
+                        <dt>Email</dt>
+                        <dd>{% if request.user.email %}{{ request.user.email }}{% else %}<span class="section-note">Not provided</span>{% endif %}</dd>
+                    </div>
+                    <div class="detail-row">
+                        <dt>Role</dt>
+                        <dd>{{ user_role_label }}</dd>
+                    </div>
+                    <div class="detail-row">
+                        <dt>Member since</dt>
+                        <dd>{{ request.user.date_joined|date:"d M Y" }}</dd>
+                    </div>
+                    <div class="detail-row">
+                        <dt>Last login</dt>
+                        <dd>{% if request.user.last_login %}{{ request.user.last_login|date:"d M Y, H:i" }}{% else %}<span class="section-note">Never</span>{% endif %}</dd>
+                    </div>
+                {% endif %}
+            </dl>
+        </div>
+
+        <div class="card">
+            <h3 id="notifications">Notifications</h3>
+            <p class="section-note">Updates about your reservations, gear, and the gear room.</p>
+
+            {% with unread_count=user_notifications_unread|default:0 %}
+            <div class="collapsible" data-collapsible data-open-when-unread data-region="account-notifications">
+                <button type="button" class="collapsible-toggle" aria-expanded="{% if unread_count %}true{% else %}false{% endif %}" aria-controls="notif-for-you">
+                    <span class="collapsible-title">
+                        For you
+                        {% if user_notifications %}<span class="collapsible-count">{{ user_notifications|length }}</span>{% endif %}
+                        {% if unread_count %}<span class="collapsible-unread">{{ unread_count }} new</span>{% endif %}
+                    </span>
+                    <span class="chevron" aria-hidden="true"></span>
+                </button>
+                <div class="collapsible-body" id="notif-for-you"{% if not unread_count %} hidden{% endif %}>
+                    {% if user_notifications %}
+                        <div class="notification-actions">
+                            <form method="post" action="{% url 'inventory:notifications_mark_read' %}" data-live-submit>
+                                {% csrf_token %}
+                                <button type="submit" class="button-link button-link-ghost">Mark all as read</button>
+                            </form>
+                            <form method="post" action="{% url 'inventory:notifications_delete_all' %}" data-live-submit onsubmit="return confirm('Delete all your notifications? This cannot be undone.');">
+                                {% csrf_token %}
+                                <button type="submit" class="button-link button-link-ghost button-link-danger">Delete all</button>
+                            </form>
+                        </div>
+                        <ul class="notification-list">
+                            {% for note in user_notifications %}
+                                <li class="notification notification-{{ note.category }} {% if not note.is_read %}is-unread{% endif %}">
+                                    <span class="notification-icon" aria-hidden="true">
+                                        {% if note.category == "reservation" %}
+                                            <svg viewBox="0 0 24 24"><path d="M7 3v3H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2V3h-2v3H9V3H7Zm-1 7h10v8H6V10Z"/></svg>
+                                        {% elif note.category == "request" %}
+                                            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm-1 1.5L18.5 9H13V3.5ZM8 13h8v2H8v-2Zm0 4h8v2H8v-2Z"/></svg>
+                                        {% else %}
+                                            <svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Zm0 7.2L4.6 6 12 2.8 19.4 6 12 9.2ZM4 9.5V17c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-7.5l-8 4-8-4Z"/></svg>
+                                        {% endif %}
+                                    </span>
+                                    <div class="notification-content">
+                                        <div class="notification-head">
+                                            {% if not note.is_read %}<span class="unread-dot" title="Unread" aria-label="Unread"></span>{% endif %}
+                                            <span class="notification-title">{{ note.title }}</span>
+                                            <span class="notification-time">{{ note.created_at|date:"D d M, H:i" }}</span>
+                                        </div>
+                                        <p class="notification-body">{{ note.message }}</p>
+                                        {% if not note.is_read %}
+                                            <form method="post" action="{% url 'inventory:notifications_mark_read' %}" class="notification-mark" data-live-submit>
+                                                {% csrf_token %}
+                                                <input type="hidden" name="pk" value="{{ note.pk }}">
+                                                <button type="submit" class="link-button">Mark as read</button>
+                                            </form>
+                                        {% endif %}
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                        {% if user_notifications.paginator.num_pages > 1 %}
+                            <nav class="pagination" aria-label="Notification pages">
+                                {% if user_notifications.has_previous %}
+                                    <a class="pagination-link" href="?page={{ user_notifications.previous_page_number }}#notifications">&laquo; Prev</a>
+                                {% endif %}
+                                <span class="pagination-status">Page {{ user_notifications.number }} of {{ user_notifications.paginator.num_pages }}</span>
+                                {% if user_notifications.has_next %}
+                                    <a class="pagination-link" href="?page={{ user_notifications.next_page_number }}#notifications">Next &raquo;</a>
+                                {% endif %}
+                            </nav>
+                        {% endif %}
+                    {% else %}
+                        <div class="notification-empty">
+                            <span class="notification-empty-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6-2-2v-4a5 5 0 0 0-4-4.9V4a1 1 0 1 0-2 0v1.1A5 5 0 0 0 7 10v4l-2 2v1h14v-1Z"/></svg>
+                            </span>
+                            <p>You're all caught up — no personal notifications.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endwith %}
+
+            <div class="collapsible" data-collapsible>
+                <button type="button" class="collapsible-toggle" aria-expanded="false" aria-controls="notif-gear-room">
+                    <span class="collapsible-title">
+                        From Kwena Music
+                        {% if notifications %}<span class="collapsible-count">{{ notifications|length }}</span>{% endif %}
+                    </span>
+                    <span class="chevron" aria-hidden="true"></span>
+                </button>
+                <div class="collapsible-body" id="notif-gear-room" hidden>
+                    {% if notifications %}
+                        <div class="announcement-list">
+                            {% for update in notifications %}
+                                {% include "inventory/partials/announcement_card.html" with update=update %}
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="section-note">No updates have been posted.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" data-region="account-gear">
+        <h3>My gear</h3>
+        <p class="section-note">Items you currently have out or booked.</p>
+        {% if borrowed_items %}
+            <ul class="borrowed-list">
+                {% for entry in borrowed_items %}
+                    <li class="borrowed-item">
+                        <div class="borrowed-item-head">
+                            <span class="status-dot {% if entry.is_overdue %}is-low{% else %}is-ok{% endif %}"></span>
+                            <span class="borrowed-name">{{ entry.item.name }}</span>
+                            <span class="pill">{{ entry.quantity }} out</span>
+                        </div>
+                        <p class="borrowed-meta">
+                            <strong{% if entry.is_overdue %} class="is-overdue"{% endif %}>{{ entry.summary }}</strong>
+                        </p>
+                        <ul class="borrowed-details">
+                            {% for d in entry.details %}
+                                <li class="borrowed-detail"{% if d.expected_return %} data-due="{{ d.expected_return|date:'c' }}"{% endif %}>
+                                    <span class="status-dot {% if d.is_overdue %}is-low{% else %}is-ok{% endif %}"></span>
+                                    <span class="detail-qty">{{ d.quantity }} &times;</span>
+                                    {% if d.time_left %}
+                                        <strong{% if d.is_overdue %} class="is-overdue"{% endif %} data-time-left>{{ d.time_left }}</strong>
+                                    {% else %}
+                                        <span class="section-note">No return date set</span>
+                                    {% endif %}
+                                    {% if d.expected_return %}<span class="section-note detail-due"> &middot; due {{ d.expected_return|date:"D d M" }}</span>{% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="section-note">You have no gear checked out right now.</p>
+        {% endif %}
+    </div>
+
+    <div class="grid grid-2">
+        <div class="card" data-region="account-reservations">
+            <h3>Book-ahead reservations</h3>
+            <p class="section-note">Gear you've reserved. An admin approves it; stock is checked out when you pick it up.</p>
+            {% if reservations %}
+                <ul class="borrowed-list">
+                    {% for entry in reservations %}
+                        <li class="borrowed-item">
+                            <div class="borrowed-item-head">
+                                <span class="borrowed-name">{{ entry.summary }}</span>
+                                <span class="pill">{{ entry.quantity }}</span>
+                                {% if entry.req.reference_code %}<span class="pill pill-neutral">{{ entry.req.reference_code }}</span>{% endif %}
+                                {% if entry.approval_status == "pending" %}
+                                    <span class="pill pill-danger">Pending</span>
+                                {% elif entry.approval_status == "approved" and entry.req.is_returned %}
+                                    <span class="pill pill-neutral">Returned</span>
+                                {% elif entry.approval_status == "approved" and entry.req.is_handed_over %}
+                                    <span class="pill pill-success">Collected</span>
+                                {% elif entry.approval_status == "approved" %}
+                                    <span class="pill pill-success">Approved</span>
+                                {% else %}
+                                    <span class="pill pill-neutral">Rejected</span>
+                                {% endif %}
+                            </div>
+                            <p class="borrowed-meta">
+                                {% if entry.taken_at %}<span class="section-note">Pickup {{ entry.taken_at|date:"D d M, H:i" }}</span>{% endif %}
+                                {% if entry.expected_return %}<span class="section-note"> &middot; return {{ entry.expected_return|date:"D d M" }}</span>{% endif %}
+                            </p>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="section-note">You have no reservations yet.</p>
+            {% endif %}
+        </div>
+
+        <div class="card" data-region="account-pending">
+            <h3>Requests awaiting approval</h3>
+            <p class="section-note">Check-out / check-in requests waiting on an admin.</p>
+            {% if pending_requests %}
+                <ul class="borrowed-list">
+                    {% for entry in pending_requests %}
+                        <li class="borrowed-item">
+                            <div class="borrowed-item-head">
+                                <span class="borrowed-name">{{ entry.summary }}</span>
+                                <span class="pill">{{ entry.type_label }}</span>
+                                <span class="pill pill-danger">Pending</span>
+                            </div>
+                            <p class="borrowed-meta">
+                                <span class="section-note">Requested {{ entry.created_at|date:"D d M, H:i" }}</span>
+                            </p>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="section-note">No pending requests.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card" data-region="account-history">
+        <h3>My gear history</h3>
+        <p class="section-note">Every request you've raised, newest first. Show the slip code at the counter when you collect or return gear.</p>
+        {% if request_history %}
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Requested</th>
+                            <th>Item(s)</th>
+                            <th>Pickup</th>
+                            <th>Return</th>
+                            <th>Status</th>
+                            <th>Slip</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in request_history %}
+                            {% with req=entry.req %}
+                            <tr>
+                                <td>{{ req.created_at|date:"D d M, H:i" }}</td>
+                                <td>
+                                    {% for line in req.items.all %}
+                                        <div>{{ line.quantity }} &times; {{ line.item.name }}</div>
+                                    {% endfor %}
+                                </td>
+                                <td>{% if req.taken_at %}{{ req.taken_at|date:"D d M, H:i" }}{% else %}<span class="section-note">Not set</span>{% endif %}</td>
+                                <td>{% if req.expected_return %}{{ req.expected_return|date:"D d M, H:i" }}{% else %}<span class="section-note">Not set</span>{% endif %}</td>
+                                <td>
+                                    {% if req.approval_status == "pending" %}
+                                        <span class="pill pill-danger">Pending</span>
+                                    {% elif req.approval_status == "approved" and req.is_handed_over and req.is_returned %}
+                                        <span class="pill pill-neutral">Returned</span>
+                                    {% elif req.approval_status == "approved" and req.is_handed_over %}
+                                        <span class="pill pill-success">Collected</span>
+                                    {% elif req.approval_status == "approved" %}
+                                        <span class="pill pill-success">Approved</span>
+                                    {% else %}
+                                        <span class="pill pill-neutral">Rejected</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if req.reference_code %}
+                                        <span class="pill pill-neutral">{{ req.reference_code }}</span>
+                                        <a class="button-link secondary btn-sm" href="{% url 'inventory:request_receipt' req.pk %}">View slip</a>
+                                    {% else %}
+                                        <span class="section-note">&mdash;</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endwith %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="section-note">You haven't made any requests yet.</p>
+        {% endif %}
+    </div>
+{% endblock %}

@@ -1,0 +1,352 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load inventory_extras %}
+
+{% block title %}Request slip {{ req.reference_code }} | Kwena Gear Room{% endblock %}
+
+{% block content %}
+<div class="card receipt-card">
+    <div class="action-bar">
+        <div>
+            <h2>Request slip</h2>
+            <p class="section-note">
+                Keep this slip code &mdash; show it at the counter when you collect or
+                return the gear.
+            </p>
+        </div>
+        {% if req.approval_status == "pending" %}
+            <span class="pill pill-danger">Pending approval</span>
+        {% elif req.approval_status == "approved" and req.is_handed_over and req.is_returned %}
+            <span class="pill pill-neutral">Returned</span>
+        {% elif req.approval_status == "approved" and req.is_handed_over %}
+            <span class="pill pill-success">Collected</span>
+        {% elif req.approval_status == "approved" %}
+            <span class="pill pill-success">Approved</span>
+        {% else %}
+            <span class="pill pill-neutral">Rejected</span>
+        {% endif %}
+    </div>
+
+    <div class="slip-code-block">
+        <span class="slip-code-label">Your slip code</span>
+        <span class="slip-code" id="slip-code">{{ req.reference_code }}</span>
+        <button type="button" class="button-link secondary btn-sm" id="copy-slip" data-copy-target="slip-code">Copy code</button>
+    </div>
+
+    <dl class="detail-list receipt-details">
+        <div class="detail-row">
+            <dt>Type</dt>
+            <dd>{{ req.transaction_type|title|cut:"_" }}</dd>
+        </div>
+        <div class="detail-row">
+            <dt>Member</dt>
+            <dd>{{ req.person_name|default:req.user.username }}</dd>
+        </div>
+        <div class="detail-row">
+            <dt>Requested</dt>
+            <dd>{{ req.created_at|date:"D d M Y, H:i" }}</dd>
+        </div>
+        {% if req.taken_at %}
+        <div class="detail-row">
+            <dt>Pickup</dt>
+            <dd>{{ req.taken_at|date:"D d M Y, H:i" }}</dd>
+        </div>
+        {% endif %}
+        {% if req.expected_return %}
+        <div class="detail-row">
+            <dt>Return</dt>
+            <dd>{{ req.expected_return|date:"D d M Y, H:i" }}</dd>
+        </div>
+        {% endif %}
+    </dl>
+
+    <h3>Items</h3>
+    <ul class="borrowed-list">
+        {% for line in req.items.all %}
+            <li class="borrowed-item">
+                <div class="borrowed-item-head">
+                    <span class="borrowed-name">{{ line.item.name }}</span>
+                    <span class="pill">{{ line.quantity }}</span>
+                </div>
+                {% if line.location %}<p class="borrowed-meta"><span class="section-note">{{ line.location.name }}</span></p>{% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+
+    {% if req.notes %}
+        <p class="section-note">Notes: {{ req.notes }}</p>
+    {% endif %}
+
+    <h3>Slip history</h3>
+    <p class="section-note">What's happened with this slip code, oldest first.</p>
+    <ul class="timeline">
+        <li class="timeline-item">
+            <span class="timeline-dot"></span>
+            <div class="timeline-body">
+                <span class="timeline-title">Request raised</span>
+                <span class="timeline-meta">{{ req.created_at|date:"D d M Y, H:i" }} &middot; {{ req.person_name|default:req.user.username }}{{ req.user|admin_suffix }}</span>
+            </div>
+        </li>
+        {% if req.decided_at %}
+        <li class="timeline-item">
+            <span class="timeline-dot"></span>
+            <div class="timeline-body">
+                <span class="timeline-title">
+                    {% if req.approval_status == "approved" %}Approved{% else %}Rejected{% endif %}
+                </span>
+                <span class="timeline-meta">{{ req.decided_at|date:"D d M Y, H:i" }}{% if req.decided_by_name %} &middot; {{ req.decided_by_name }}{{ req.decided_by|admin_suffix }}{% endif %}</span>
+            </div>
+        </li>
+        {% endif %}
+        {% if req.handed_over_at %}
+        <li class="timeline-item">
+            <span class="timeline-dot"></span>
+            <div class="timeline-body">
+                <span class="timeline-title">Collected</span>
+                <span class="timeline-meta">{{ req.handed_over_at|date:"D d M Y, H:i" }}{% if req.handed_over_by_name %} &middot; {{ req.handed_over_by_name }}{{ req.handed_over_by|admin_suffix }}{% endif %}</span>
+            </div>
+        </li>
+        {% endif %}
+        {% if req.returned_at %}
+        {% with return_txn=req.returns.all|first %}
+        {% if not return_txn or return_txn.user|is_admin %}
+        <li class="timeline-item">
+            <span class="timeline-dot"></span>
+            <div class="timeline-body">
+                <span class="timeline-title">Returned</span>
+                <span class="timeline-meta">{{ req.returned_at|date:"D d M Y, H:i" }}{% if return_txn %} &middot; {{ return_txn.person_name|default:return_txn.user.username }}{{ return_txn.user|admin_suffix }}{% elif req.returned_by_name %} &middot; {{ req.returned_by_name }}{{ req.returned_by|admin_suffix }}{% endif %}</span>
+            </div>
+        </li>
+        {% endif %}
+        {% endwith %}
+        {% endif %}
+        {% if req.is_voided %}
+        <li class="timeline-item">
+            <span class="timeline-dot timeline-dot-danger"></span>
+            <div class="timeline-body">
+                <span class="timeline-title">Voided</span>
+                <span class="timeline-meta">
+                    {% if req.voided_at %}{{ req.voided_at|date:"D d M Y, H:i" }}{% endif %}{% if req.voided_by_name %} &middot; {{ req.voided_by_name }}{{ req.voided_by|admin_suffix }}{% endif %}
+                    {% if req.voided_reason %}<br>{{ req.voided_reason }}{% endif %}
+                </span>
+            </div>
+        </li>
+        {% endif %}
+        {% for ret in req.returns.all %}
+        {% if not ret.user|is_admin %}
+        <li class="timeline-item">
+            <span class="timeline-dot timeline-dot-success"></span>
+            <div class="timeline-body">
+                <span class="timeline-title">Returned</span>
+                <span class="timeline-meta">
+                    {% if ret.is_returned %}{{ ret.returned_at|date:"D d M Y, H:i" }}{% else %}{{ ret.created_at|date:"D d M Y, H:i" }}{% endif %} &middot; {{ ret.person_name|default:ret.user.username }}{{ ret.user|admin_suffix }}{% if ret.decided_at and ret.approval_status == "approved" %} &middot; Approved by {{ ret.decided_by_name }}{{ ret.decided_by|admin_suffix }}{% endif %}{% if ret.reference_code %} &middot; {{ ret.reference_code }}{% endif %}
+                </span>
+                {% for rline in ret.items.all %}
+                <span class="timeline-meta timeline-meta-sub">{{ rline.quantity }} x {{ rline.item.name }}{% if rline.condition %} &middot; {{ rline.condition.name }}{% endif %}</span>
+                {% endfor %}
+            </div>
+        </li>
+        {% endif %}
+        {% endfor %}
+    </ul>
+
+    <div class="actions">
+        <button type="button" class="button-link secondary" data-print-target="slip-doc">Print slip</button>
+        <form method="post" action="{% url 'inventory:request_email_slip' req.pk %}" class="slip-email-form">
+            {% csrf_token %}
+            <button type="submit" class="button-link secondary">Email slip</button>
+        </form>
+        <a class="button-link" href="{% url 'inventory:catalog' %}">Back to browse</a>
+    </div>
+
+    {# Print-only receipt-style slip. Hidden on screen. #}
+    <div class="slip-doc" id="slip-doc" aria-hidden="true" style="display:none">
+        <div class="slip-doc-inner">
+            <div class="slip-doc-header">
+                <img class="slip-doc-logo" src="{% static 'images/kwena-logo.png' %}" alt="Kwena Music">
+                <div class="slip-doc-brand">
+                    <span class="slip-doc-brand-name">Kwena Music</span>
+                    <span class="slip-doc-brand-sub">Inventory Slip</span>
+                </div>
+                <div class="slip-doc-status-chip">
+                    {% if req.approval_status == "pending" %}Pending approval
+                    {% elif req.approval_status == "approved" and req.is_handed_over and req.is_returned %}Returned
+                    {% elif req.approval_status == "approved" and req.is_handed_over %}Collected
+                    {% elif req.approval_status == "approved" %}Approved
+                    {% else %}Rejected{% endif %}
+                </div>
+            </div>
+
+            <div class="slip-doc-coderow">
+                <span class="slip-doc-code-label">Slip code</span>
+                <span class="slip-doc-code">{{ req.reference_code }}</span>
+                <span class="slip-doc-type">{{ req.transaction_type|title|cut:"_" }}</span>
+                {% if return_url %}
+                <img class="slip-doc-qr" src="{{ return_url|qr_data_uri:2 }}" alt="Scan to return {{ req.reference_code }}">
+                {% endif %}
+            </div>
+
+            <div class="slip-doc-member">
+                <div class="slip-doc-member-head">Member details</div>
+                <table class="slip-doc-member-grid">
+                    <colgroup>
+                        <col class="slip-doc-member-label">
+                        <col>
+                        <col class="slip-doc-member-label">
+                        <col>
+                    </colgroup>
+                    <tr>
+                        <th>Name</th>
+                        <td>{{ req.person_name|default:req.user.username }}</td>
+                        <th>Username</th>
+                        <td>{{ req.user.username }}</td>
+                    </tr>
+                    {% if req.user.email or req.user.guest_profile.email %}
+                    <tr>
+                        <th>Email</th>
+                        <td colspan="3">{{ req.user.email|default:req.user.guest_profile.email }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if req.user.guest_profile %}
+                    {% if req.user.guest_profile.phone %}
+                    <tr>
+                        <th>Phone</th>
+                        <td>{{ req.user.guest_profile.phone }}</td>
+                        <th>Org</th>
+                        <td>{{ req.user.guest_profile.organization|default:"—" }}</td>
+                    </tr>
+                    {% endif %}
+                    {% elif req.user.user_profile %}
+                    <tr>
+                        <th>Role</th>
+                        <td>{{ req.user.user_profile.get_role_display }}</td>
+                        {% if req.user.user_profile.phone %}
+                        <th>Phone</th>
+                        <td>{{ req.user.user_profile.phone }}</td>
+                        {% else %}
+                        <td colspan="2">&mdash;</td>
+                        {% endif %}
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+
+            <table class="slip-doc-meta">
+                <tr>
+                    <th>Requested</th>
+                    <td>{{ req.created_at|date:"D d M Y, H:i" }}</td>
+                    <th>Items</th>
+                    <td>{{ req.total_quantity }} unit(s)</td>
+                </tr>
+                {% if req.taken_at or req.expected_return %}
+                <tr>
+                    <th>Pickup</th>
+                    <td>{% if req.taken_at %}{{ req.taken_at|date:"D d M Y, H:i" }}{% else %}&mdash;{% endif %}</td>
+                    <th>Return</th>
+                    <td>{% if req.expected_return %}{{ req.expected_return|date:"D d M Y, H:i" }}{% else %}&mdash;{% endif %}</td>
+                </tr>
+                {% endif %}
+            </table>
+
+            <div class="slip-doc-section-label">Items</div>
+            <table class="slip-doc-items">
+                <thead>
+                    <tr>
+                        <th class="slip-doc-qty">Qty</th>
+                        <th>Item</th>
+                        <th>SKU</th>
+                        <th>Location</th>
+                        <th>Condition</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in req.items.all %}
+                    <tr>
+                        <td class="slip-doc-qty">{{ line.quantity }}</td>
+                        <td>{{ line.item.name }}</td>
+                        <td>{{ line.item.sku|default:"—" }}</td>
+                        <td>{% if line.location %}{{ line.location.name }}{% else %}&mdash;{% endif %}</td>
+                        <td>{% if line.condition %}{{ line.condition.name }}{% elif line.item_id in return_conditions %}{{ return_conditions|get_item:line.item_id }}{% else %}&mdash;{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td class="slip-doc-qty">{{ req.total_quantity }}</td>
+                        <td colspan="4">Total units</td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            {% if req.notes %}
+            <div class="slip-doc-notes">
+                <span class="slip-doc-notes-label">Notes</span>
+                <p>{{ req.notes }}</p>
+            </div>
+            {% endif %}
+
+            <div class="slip-doc-history">
+                <span class="slip-doc-history-label">Slip history</span>
+                <ul class="slip-doc-timeline">
+                    <li class="slip-doc-event">
+                        <span class="slip-doc-event-title">Request raised</span>
+                        <span class="slip-doc-event-meta">{{ req.created_at|date:"D d M Y, H:i" }} &middot; {{ req.person_name|default:req.user.username }}{{ req.user|admin_suffix }}</span>
+                    </li>
+                    {% if req.decided_at %}
+                    <li class="slip-doc-event">
+                        <span class="slip-doc-event-title">{% if req.approval_status == "approved" %}Approved{% else %}Rejected{% endif %}</span>
+                        <span class="slip-doc-event-meta">{{ req.decided_at|date:"D d M Y, H:i" }}{% if req.decided_by_name %} &middot; {{ req.decided_by_name }}{{ req.decided_by|admin_suffix }}{% endif %}</span>
+                    </li>
+                    {% endif %}
+                    {% if req.handed_over_at %}
+                    <li class="slip-doc-event">
+                        <span class="slip-doc-event-title">Collected</span>
+                        <span class="slip-doc-event-meta">{{ req.handed_over_at|date:"D d M Y, H:i" }}{% if req.handed_over_by_name %} &middot; {{ req.handed_over_by_name }}{{ req.handed_over_by|admin_suffix }}{% endif %}</span>
+                    </li>
+                    {% endif %}
+                    {% if req.returned_at or req.transaction_type == "check_in" and req.source_request %}
+                    {% with loan=req.source_request return_txn=req.returns.all|first %}
+                    {% if return_txn and not return_txn.user|is_admin %}
+                        {# user self-return: shown as a single merged event in the returns loop below #}
+                    {% elif return_txn %}
+                        {% include "inventory/partials/_returned_event.html" with event_req=req return_name=return_txn.person_name|default:return_txn.user.username return_user=return_txn.user %}
+                    {% elif req.returned_by_name %}
+                        {% include "inventory/partials/_returned_event.html" with event_req=req return_name=req.returned_by_name return_user=req.returned_by %}
+                    {% elif req.decided_by_name %}
+                        {% include "inventory/partials/_returned_event.html" with event_req=req return_name=req.decided_by_name return_user=req.decided_by %}
+                    {% elif loan and loan.returned_by_name %}
+                        {% include "inventory/partials/_returned_event.html" with event_req=req return_name=loan.returned_by_name return_user=loan.returned_by %}
+                    {% else %}
+                        {% include "inventory/partials/_returned_event.html" with event_req=req return_name="" return_user=None %}
+                    {% endif %}
+                    {% endwith %}
+                    {% endif %}
+                    {% if req.is_voided %}
+                    <li class="slip-doc-event slip-doc-event-danger">
+                        <span class="slip-doc-event-title">Voided</span>
+                        <span class="slip-doc-event-meta">{% if req.voided_at %}{{ req.voided_at|date:"D d M Y, H:i" }}{% endif %}{% if req.voided_by_name %} &middot; {{ req.voided_by_name }}{{ req.voided_by|admin_suffix }}{% endif %}{% if req.voided_reason %} &middot; {{ req.voided_reason }}{% endif %}</span>
+                    </li>
+                    {% endif %}
+                    {% for ret in req.returns.all %}
+                    {% if not ret.user|is_admin %}
+                    <li class="slip-doc-event slip-doc-event-success">
+                        <span class="slip-doc-event-title">Returned</span>
+                        <span class="slip-doc-event-meta">{% if ret.is_returned %}{{ ret.returned_at|date:"D d M Y, H:i" }}{% else %}{{ ret.created_at|date:"D d M Y, H:i" }}{% endif %} &middot; {{ ret.person_name|default:ret.user.username }}{{ ret.user|admin_suffix }}{% if ret.decided_at and ret.approval_status == "approved" %} &middot; Approved by {{ ret.decided_by_name }}{{ ret.decided_by|admin_suffix }}{% endif %}{% if ret.reference_code %} &middot; {{ ret.reference_code }}{% endif %}</span>
+                        {% for rline in ret.items.all %}
+                        <span class="slip-doc-event-meta slip-doc-event-sub">{{ rline.quantity }} x {{ rline.item.name }}{% if rline.condition %} &middot; {{ rline.condition.name }}{% endif %}</span>
+                        {% endfor %}
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="slip-doc-foot">
+                <p class="slip-doc-foot-note">Show this slip code at the counter when you collect or return the gear.{% if req.approval_status == "pending" %}
+                   An admin must approve the request before any stock moves.{% endif %}</p>
+                <p class="slip-doc-fineprint">Kwena Music &middot; Gear, in and out &middot; Issued {{ req.created_at|date:"Y-m-d H:i" }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

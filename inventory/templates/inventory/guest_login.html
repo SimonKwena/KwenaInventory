@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Guest access | Kwena Gear Room{% endblock %}
+
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="card auth-card" style="max-width: 520px; margin: 0 auto;">
+    <h2>Guest sign in</h2>
+    <p class="section-note">Provide your details so inventory activity is attributed correctly. No password needed.</p>
+    <form method="post" class="form-row">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="button-link">Continue</button>
+    </form>
+</div>
+{% endblock %}

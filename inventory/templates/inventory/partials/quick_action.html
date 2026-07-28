@@ -1,0 +1,141 @@
+{% if can_book_ahead or can_check_out or can_check_in %}
+    <div class="card">
+        <h3>Quick action</h3>
+        <p class="section-note">Pick an action, then scan a QR/SKU or choose items. Every request needs an admin to approve it before any stock moves &mdash; book aheads are held as reservations until pickup.</p>
+        <form id="home-action-form" method="post" action="{% url 'inventory:process_transaction' %}"{% if is_admin_quick_action %} data-admin-quick-action="true"{% endif %}>
+            {% csrf_token %}
+            <div class="form-row" data-region="home-qa-actions">
+                <label class="label">Action</label>
+                <div class="segmented" role="radiogroup" aria-label="Action">
+                    {% if can_book_ahead %}<label class="segment"><input type="radio" name="transaction_type" value="book_ahead" checked><span>Book ahead</span></label>{% endif %}
+                    {% if can_check_out %}<label class="segment"><input type="radio" name="transaction_type" value="check_out"><span>Check out</span></label>{% endif %}
+                    {% if can_check_in %}<label class="segment"><input type="radio" name="transaction_type" value="check_in"><span>Check in</span></label>{% endif %}
+                </div>
+            </div>
+            {% if show_slip_input %}
+            <div class="form-row quick-view-row" id="slip-input-row" style="display:none;">
+                <div class="field-input-group quick-view-input">
+                    <label class="label" for="quick-view-slip">Slip code</label>
+                    <div class="field-input-row slip-code-row">
+                        <span class="slip-prefix" aria-hidden="true">KW-</span>
+                        <input
+                            type="text"
+                            id="quick-view-slip"
+                            name="slip_code"
+                            class="slip-digits"
+                            placeholder="0000"
+                            autocomplete="off"
+                            inputmode="numeric"
+                            maxlength="4"
+                            pattern="[0-9]{4}"
+                        >
+                        <button type="button" class="button-link clear-button" id="quick-view-clear-slip">Clear</button>
+                    </div>
+                    <p class="section-note" id="quick-view-status" aria-live="polite">
+                        Enter the 4-digit slip number or scan with the camera.
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+            <div data-region="home-qa-loans">
+            {% if active_loans %}
+                <div class="form-row checkin-loan-field" id="checkin-loan-field" style="display:none;">
+                    <label class="label loan-select-label">Returning which loan? <span class="required-star">*</span> <span class="section-note">Pick the slip code for the gear you're bringing back.</span></label>
+                    <select name="source_request_id" id="source-request-id" class="loan-select">
+                        <option value="">— Choose a loan —</option>
+                        {% for loan in active_loans %}
+                            <option value="{{ loan.loan.pk }}" data-code="{{ loan.reference_code }}" data-items="{% for line in loan.items %}{{ line.item.pk }}:{{ line.quantity }}:{{ line.location.pk|default:'' }}{% if not forloop.last %}|{% endif %}{% endfor %}">{{ loan.reference_code }} &middot; {% for line in loan.items %}{{ line.quantity }} &times; {{ line.item.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="button-link secondary btn-sm camera-scan-home-open">Open camera scan</button>
+                    <div class="card-light" id="home-camera-panel" style="display:none;">
+                        <video id="home-scan-video" playsinline autoplay muted></video>
+                        <p id="home-scan-status" class="section-note">Allow camera access and point the QR code at the camera.</p>
+                        <div class="form-row">
+                            <button type="button" id="stop-camera-home" class="button-link secondary btn-sm">Stop camera</button>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="form-row checkin-loan-field" id="checkin-loan-field" style="display:none;">
+                    <button type="button" class="button-link secondary btn-sm camera-scan-home-open">Open camera scan</button>
+                    <div class="card-light" id="home-camera-panel" style="display:none;">
+                        <video id="home-scan-video" playsinline autoplay muted></video>
+                        <p id="home-scan-status" class="section-note">Allow camera access and point the QR code at the camera.</p>
+                        <div class="form-row">
+                            <button type="button" id="stop-camera-home" class="button-link secondary btn-sm">Stop camera</button>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+            </div>
+            <div id="item-rows">
+                <div class="item-row">
+                    <div>
+                        <label class="label">Location <span class="required-star">*</span></label>
+                        <select name="location_ids" required>
+                            <option value="">Choose a location</option>
+                            {% for location in locations %}
+                                <option value="{{ location.id }}">{{ location.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label">Item <span class="required-star">*</span></label>
+                        <select name="item_ids" required>
+                            <option value="">Choose an item</option>
+                            {% for item in items %}
+                                <option value="{{ item.id }}" data-location-id="{{ item.location.id }}">{{ item.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label">Quantity <span class="required-star">*</span></label>
+                        <input type="number" name="quantities" value="1" min="1" required>
+                    </div>
+                    <div class="condition-field">
+                        <label class="label">Condition</label>
+                        <select name="condition_ids">
+                            <option value="">No update</option>
+                            {% for condition in conditions %}
+                                <option value="{{ condition.id }}">{{ condition.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="action-row">
+                <button type="button" id="add-item-row" class="button-link secondary btn-sm">Add item</button>
+            </div>
+            <input type="hidden" name="asset_tag" id="home-scan-asset">
+            <input type="hidden" name="hand_over_request_id" id="home-hand-over-id">
+            {% if is_admin_quick_action %}
+                <input type="hidden" name="source_request_id" id="home-source-request-id">
+                <input type="hidden" name="checked_in_by_admin" id="home-checked-in-by-admin" value="1">
+            {% endif %}
+            <div class="form-row form-row-half">
+                <div id="taken-at-field">
+                    <label class="label">Expected Checkout <span class="required-star">*</span></label>
+                    <input type="datetime-local" name="taken_at" required>
+                </div>
+                <div id="expected-return-field">
+                    <label class="label">Expected return <span class="required-star">*</span></label>
+                    <input type="datetime-local" name="expected_return" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <label class="label" id="notes-label">Notes <span class="optional-note">(optional)</span></label>
+                <textarea name="notes" rows="2"></textarea>
+            </div>
+            <div class="actions">
+                <button type="submit" class="button-link">Submit action</button>
+                <button type="button" id="clear-home-form" class="button-link secondary">Clear</button>
+            </div>
+        </form>
+    </div>
+{% else %}
+    <div class="card">
+        <h2>Workspace access needed</h2>
+        <p class="section-note">The check in/out forms are available only for <strong>@kwenamusic.co.za</strong> users. Sign in with the correct account to continue.</p>
+    </div>
+{% endif %}

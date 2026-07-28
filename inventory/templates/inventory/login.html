@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Local login | Kwena Gear Room{% endblock %}
+
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="card auth-card" style="max-width: 460px; margin: 0 auto;">
+    <h2>Local login</h2>
+    <p class="section-note">Sign in without Google Workspace when testing the app.</p>
+    <form method="post" class="form-row">
+        {% csrf_token %}
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        {{ form.non_field_errors }}
+        <div>
+            <label class="label" for="id_username">Username</label>
+            {{ form.username }}
+        </div>
+        <div>
+            <label class="label" for="id_password">Password</label>
+            <div style="display:flex; gap:10px; align-items:center;">
+                {{ form.password }}
+                <button id="password-toggle" type="button" class="button-link secondary btn-sm">Show</button>
+            </div>
+        </div>
+        <button type="submit" class="button-link">Sign in</button>
+    </form>
+</div>
+{% endblock %}

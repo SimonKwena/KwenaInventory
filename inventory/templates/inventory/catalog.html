@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block title %}Browse gear | Kwena Gear Room{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <div class="catalog-toolbar">
+            <div>
+                <h2>Available items</h2>
+                <p class="section-note">Browse by category. Expand a group to see its gear.</p>
+            </div>
+            <div class="catalog-toolbar-actions">
+                <button type="button" id="catalog-toggle-all" class="button-link secondary btn-sm">Expand all</button>
+            </div>
+        </div>
+    <div data-region="catalog-sections">
+        {% regroup items by group_label as category_list %}
+        {% for category_group in category_list %}
+            <section class="catalog-section">
+                <div class="catalog-section-head catalog-head-interactive">
+                    <button type="button" class="catalog-section-toggle group-toggle" data-target="category-group-{{ forloop.counter }}" aria-expanded="false" aria-controls="category-group-{{ forloop.counter }}">
+                        <span class="catalog-toggle-label">
+                            <span class="catalog-chevron" aria-hidden="true"></span>
+                            <h3>{{ category_group.grouper }}<span class="catalog-count">{{ category_group.list|length }}</span></h3>
+                        </span>
+                    </button>
+                </div>
+                <div class="group-body collapsed" id="category-group-{{ forloop.counter }}">
+                    <div class="item-grid">
+                        {% for item in category_group.list %}
+                            <article class="item-tile">
+                                <div class="item-tile-head">
+                                    <div class="item-tile-title">
+                                        <span class="status-dot {% if item.quantity_available > 0 %}is-ok{% elif item.quantity_out > 0 %}is-low{% else %}is-empty{% endif %}"></span>
+                                        <h4>{{ item.name }}</h4>
+                                    </div>
+                                    <span class="pill">{{ item.location.name }}</span>
+                                </div>
+                                {% if item.subcategory %}<span class="item-tile-sub">{{ item.subcategory }}</span>{% endif %}
+                                {% if item.type_label %}<p class="item-tile-type">{{ item.type_label }}</p>{% endif %}
+                                <div class="item-tile-meta">
+                                    {% if item.quantity_available > 0 %}
+                                        <span class="pill pill-success">{{ item.quantity_available }} available</span>
+                                    {% else %}
+                                        <span class="pill pill-danger">Out of stock</span>
+                                    {% endif %}
+                                </div>
+                                <div class="item-tile-actions">
+                                    <div class="item-tile-qty">
+                                        <label class="label" for="cart-qty-{{ item.pk }}">Qty</label>
+                                        <input type="number" id="cart-qty-{{ item.pk }}" class="cart-qty" value="1" min="1" max="{{ item.quantity_available|default:1 }}">
+                                    </div>
+                                    <div class="item-tile-buttons">
+                                        <form method="post" action="{% url 'inventory:cart_add' %}" class="cart-add-form">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="book_ahead">
+                                            <input type="hidden" name="item_id" value="{{ item.pk }}">
+                                            <input type="hidden" name="quantity" value="1">
+                                            <button type="submit" class="button-link secondary btn-sm">Add &middot; Book ahead</button>
+                                        </form>
+                                        {% if can_check_out %}
+                                        <form method="post" action="{% url 'inventory:cart_add' %}" class="cart-add-form">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="check_out">
+                                            <input type="hidden" name="item_id" value="{{ item.pk }}">
+                                            <input type="hidden" name="quantity" value="1">
+                                            <button type="submit" class="button-link secondary btn-sm">Add &middot; Check out</button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                    <a class="text-link" href="{% url 'inventory:item_detail' item.pk %}">Details &rarr;</a>
+                                </div>
+                            </article>
+                        {% endfor %}
+                    </div>
+                </div>
+            </section>
+        {% empty %}
+            <p>No active items yet. Add some from the admin panel.</p>
+        {% endfor %}
+    </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Edit details | Kwena Gear Room{% endblock %}
+
+{% block content %}
+    <div class="card auth-card" style="max-width: 520px; margin: 0 auto;">
+        <h2>Edit details</h2>
+        <p class="section-note">
+            {% if is_guest %}
+                Update the contact details attached to your guest session.
+            {% else %}
+                Update your name and email on your account.
+            {% endif %}
+        </p>
+        <form method="post" class="form-row">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            {% for field in form %}
+                <div>
+                    <label class="label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}<p class="section-note">{{ field.help_text }}</p>{% endif %}
+                    {{ field.errors }}
+                </div>
+            {% endfor %}
+            <div class="actions">
+                <button type="submit" class="button-link">Save changes</button>
+                <a class="button-link secondary" href="{% url 'inventory:account' %}">Cancel</a>
+            </div>
+        </form>
+    </div>
+{% endblock %}
