@@ -40,23 +40,23 @@
                 </tr>
             </thead>
             <tbody>
-                {% for item in take_items %}
-                    <tr>
-                        <td><a class="text-link" href="{% url 'inventory:item_detail' item.item.pk %}">{{ item.item.name }}</a></td>
-                        <td>{{ item.item.sku|default:"—" }}</td>
-                        <td>{{ item.expected_quantity }}</td>
-                        <td>{{ item.counted_quantity }}</td>
-                        <td>
-                            {% if item.difference != 0 %}
-                                <span style="color: var(--danger);">
-                                    {{ item.difference }}
-                                </span>
-                            {% else %}
-                                <span style="color: var(--success);">0</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                {% empty %}
+                    {% for item in take_items %}
+                        <tr class="{% if item.difference != 0 %}is-discrepancy{% endif %}">
+                            <td><a class="text-link" href="{% url 'inventory:item_detail' item.item.pk %}">{{ item.item.name }}</a></td>
+                            <td>{{ item.item.sku|default:"—" }}</td>
+                            <td>{{ item.expected_quantity }}</td>
+                            <td>{{ item.counted_quantity }}</td>
+                            <td>
+                                {% if item.difference != 0 %}
+                                    <span class="pill pill-danger">
+                                        {{ item.difference }}
+                                    </span>
+                                {% else %}
+                                    <span class="pill pill-success">0</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
                     <tr><td colspan="5">No items recorded.</td></tr>
                 {% endfor %}
             </tbody>

@@ -31,13 +31,13 @@
                         <div class="nav-buttons">
                             {% if request.user.is_staff %}
                                 <div class="nav-links">
-                                    {% if request.user.is_superuser or user_role == "admin" %}
-                                    <a class="nav-link {% if request.path == '/inventory/dashboard/' %}is-active{% endif %}" href="{% url 'inventory:dashboard' %}">Dashboard</a>
+                                    {% if request.user.is_superuser or user_role == "admin" or user_role == "superadmin" %}
+                                    <a class="nav-link {% if '/inventory/dashboard/' in request.path %}is-active{% endif %}" href="{% url 'inventory:dashboard' %}">Dashboard</a>
                                     {% endif %}
                                     {% if user_role == "staff" %}
-                                    <a class="nav-link {% if request.path == '/inventory/staff/' %}is-active{% endif %}" href="{% url 'inventory:staff_home' %}">Staff desk</a>
+                                    <a class="nav-link {% if '/inventory/staff/' in request.path %}is-active{% endif %}" href="{% url 'inventory:staff_home' %}">Staff desk</a>
                                     {% endif %}
-                                    <a class="nav-link {% if request.path == '/inventory/catalog/' %}is-active{% endif %}" href="{% url 'inventory:catalog' %}">Browse Items</a>
+                                    <a class="nav-link {% if '/inventory/catalog' in request.path %}is-active{% endif %}" href="{% url 'inventory:catalog' %}">Browse Items</a>
                                     <div class="nav-dropdown" id="manage-dropdown">
                                         <button type="button" class="nav-link nav-dropdown-toggle {% if '/inventory/items/' in request.path or '/inventory/maintenance/' in request.path or request.path == '/inventory/announcements/' or request.path == '/inventory/requests/' or request.path == '/inventory/admin/users/' %}is-active{% endif %}" id="manage-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="manage-menu">
                                              Manage
@@ -48,7 +48,7 @@
                                                 <a class="nav-dropdown-link {% if '/inventory/items/' in request.path %}is-active{% endif %}" href="{% url 'inventory:item_list' %}" role="menuitem">Items</a>
                                                <a class="nav-dropdown-link {% if request.path == '/inventory/announcements/' %}is-active{% endif %}" href="{% url 'inventory:announcements' %}" role="menuitem">Updates</a>
                                                   {% if request.user.is_superuser %}
-                                               <a class="nav-dropdown-link {% if request.path == '/inventory/admin/users/' %}is-active{% endif %}" href="{% url 'admin_users' %}" role="menuitem">Users</a>
+                                                <a class="nav-dropdown-link {% if request.path == '/inventory/admin/users/' %}is-active{% endif %}" href="{% url 'admin_users' %}" role="menuitem">Users</a>
                                                   {% endif %}
                                                {% endif %}
                                               <a class="nav-dropdown-link {% if '/inventory/maintenance/' in request.path %}is-active{% endif %}" href="{% url 'inventory:maintenance' %}" role="menuitem">Maintenance</a>
@@ -60,14 +60,14 @@
                                 </div>
                             {% elif is_teacher %}
                                 <div class="nav-links">
-                                    <a class="nav-link {% if request.path == '/inventory/teacher/' %}is-active{% endif %}" href="{% url 'inventory:teacher_home' %}">Home</a>
-                                    <a class="nav-link {% if request.path == '/inventory/catalog/' %}is-active{% endif %}" href="{% url 'inventory:catalog' %}">Browse Items</a>
+                                    <a class="nav-link {% if '/inventory/teacher/' in request.path %}is-active{% endif %}" href="{% url 'inventory:teacher_home' %}">Home</a>
+                                    <a class="nav-link {% if '/inventory/catalog' in request.path %}is-active{% endif %}" href="{% url 'inventory:catalog' %}">Browse Items</a>
                                     <a class="nav-link {% if '/inventory/maintenance/' in request.path %}is-active{% endif %}" href="{% url 'inventory:maintenance' %}">Maintenance</a>
                                 </div>
                             {% else %}
                                 <div class="nav-links">
-                                    <a class="nav-link {% if request.path == '/inventory/' %}is-active{% endif %}" href="{% url 'inventory:home' %}">Home</a>
-                                    <a class="nav-link {% if request.path == '/inventory/catalog/' %}is-active{% endif %}" href="{% url 'inventory:catalog' %}">Browse Items</a>
+                                    <a class="nav-link {% if '/inventory/' in request.path and not '/inventory/dashboard/' in request.path and not '/inventory/staff/' in request.path and not '/inventory/catalog/' in request.path and not '/inventory/items/' in request.path and not '/inventory/maintenance/' in request.path and not '/inventory/announcements/' in request.path and not '/inventory/requests/' in request.path %}is-active{% endif %}" href="{% url 'inventory:home' %}">Home</a>
+                                    <a class="nav-link {% if '/inventory/catalog' in request.path %}is-active{% endif %}" href="{% url 'inventory:catalog' %}">Browse Items</a>
                                 </div>
                             {% endif %}
                             <div class="nav-account">

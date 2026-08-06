@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}Sign In | Kwena Gear Room{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<div class="card auth-card" style="max-width: 460px; margin: 0 auto;">
+    <h2>Sign In</h2>
+    {% if not SOCIALACCOUNT_ONLY %}
+    <p class="section-note">Don't have an account? <a href="{% url 'account_signup' %}">Sign up</a></p>
+    <form method="post" action="{% url 'account_login' %}" class="form-row">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        {% for field in form %}
+            <div>
+                <label class="label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}
+                <small class="help-text">{{ field.help_text }}</small>
+                {% endif %}
+            </div>
+        {% endfor %}
+        <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}" />
+        <button type="submit" class="button-link">Sign In</button>
+    </form>
+    {% endif %}
+    {% if SOCIALACCOUNT_ENABLED %}
+    <div class="social-login">
+        <div class="form-section-title" style="text-align:center; border-top:none; padding-top:0; margin-top:8px;">
+            <span>or</span>
+        </div>
+        <a class="button-link secondary" href="{% url 'google_login' %}">Continue with Google</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

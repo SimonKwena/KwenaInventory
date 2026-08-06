@@ -536,11 +536,13 @@ def catalog(request):
         desc = (item.description or "").strip()
         item.type_label = desc if not desc.startswith("Imported from") else ""
         item.group_label = (item.category or "").strip() or (item.type_label or "Items")
+    locations = Location.objects.filter(is_active=True).order_by("name")
     return render(
         request,
         "inventory/catalog.html",
         {
             "items": items,
+            "locations": locations,
             "can_check_out": can_check_out(request.user),
             "cart_counts": _cart_counts(request),
         },
@@ -883,12 +885,24 @@ def process_transaction(request):
         messages.error(request, error)
         return redirect("inventory:home")
 
-    label = transaction_type.replace("_", " ").title()
-    item_count = request_obj.items.count()
-    messages.success(
-        request,
-        f"{label} request submitted for {item_count} item(s). An admin must approve it before any stock moves.",
-    )
+    if is_staff_role(request.user):
+        ok, error = apply_request(request_obj, decided_by=request.user)
+        if not ok:
+            messages.error(request, error)
+            return redirect("inventory:staff_home" if request.user.is_staff else "inventory:home")
+        label = transaction_type.replace("_", " ").title()
+        item_count = request_obj.items.count()
+        messages.success(
+            request,
+            f"Auto-approved {label} for {item_count} item(s). Stock has moved.",
+        )
+    else:
+        label = transaction_type.replace("_", " ").title()
+        item_count = request_obj.items.count()
+        messages.success(
+            request,
+            f"{label} request submitted for {item_count} item(s). An admin must approve it before any stock moves.",
+        )
     # Remove the submitted items from the session cart so it does not linger
     # after a successful request.
     submitted_ids = {entry["item"].pk for entry in item_entries}
@@ -964,8 +978,16 @@ def scan_item(request):
     if error:
         messages.error(request, error)
         return redirect("inventory:home")
-    label = transaction_type.replace("_", " ").title()
-    messages.success(request, f"{label} request submitted for {item.name}. An admin must approve it before any stock moves.")
+    if is_staff_role(request.user):
+        ok, error = apply_request(request_obj, decided_by=request.user)
+        if not ok:
+            messages.error(request, error)
+            return redirect("inventory:staff_home" if request.user.is_staff else "inventory:home")
+        label = transaction_type.replace("_", " ").title()
+        messages.success(request, f"Auto-approved {label} for {item.name}. Stock has moved.")
+    else:
+        label = transaction_type.replace("_", " ").title()
+        messages.success(request, f"{label} request submitted for {item.name}. An admin must approve it before any stock moves.")
     # Send the member back to their home page and surface the slip as a
     # one-shot popup there instead of navigating to a standalone receipt page.
     request.session["slip_request_id"] = request_obj.pk
@@ -1199,6 +1221,7 @@ def dashboard(request):
             "can_check_in": can_check_in(request.user, has_active_gear),
             "active_loans": active_loans,
             "show_quick_action": is_admin_or_above(request.user),
+            "last_updated": timezone.now(),
         },
     )
 
@@ -1958,6 +1981,7 @@ def item_list(request):
             "total_out": total_out,
             "maintenance_open": maintenance_open,
             "maintenance_count": maintenance_count,
+            "last_updated": timezone.now(),
         },
     )
 

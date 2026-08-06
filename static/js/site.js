@@ -77,6 +77,25 @@ function showToast(message, opts) {
     setTimeout(function () { toast.remove(); }, opts.duration || 5000);
 }
 
+/* Toggle skeleton loading state on a form or region. */
+function setSkeletonLoading(form, loading) {
+    if (!form) {
+        return;
+    }
+    const region = form.closest('[data-region]');
+    if (region) {
+        region.setAttribute('data-loading', loading ? 'true' : 'false');
+    }
+    form.querySelectorAll('button, input, select, textarea').forEach(function (el) {
+        el.disabled = loading;
+    });
+    if (loading) {
+        form.classList.add('is-loading');
+    } else {
+        form.classList.remove('is-loading');
+    }
+}
+
 /* ---------- Browse "Add to cart" (event-delegated, survives live refresh) ---------- */
 function cartQtyFor(itemId) {
     const input = document.querySelector('.cart-qty[data-item="' + itemId + '"]');
@@ -108,8 +127,7 @@ document.addEventListener('submit', function (event) {
     if (!form) {
         return;
     }
-    const tile = form.closest('.item-tile, .item-detail-cart');
-    const qtyInput = tile ? tile.querySelector('.cart-qty') : null;
+    const qtyInput = form.querySelector('.cart-qty');
     if (qtyInput) {
         const hidden = form.querySelector('input[name="quantity"]');
         if (hidden) {
@@ -117,6 +135,7 @@ document.addEventListener('submit', function (event) {
         }
     }
     event.preventDefault();
+    setSkeletonLoading(form, true);
     const btn = form.querySelector('button[type="submit"]');
     const formData = new FormData(form);
     fetch(form.getAttribute('action'), {
@@ -138,6 +157,7 @@ document.addEventListener('submit', function (event) {
             });
         })
         .then(function (data) {
+            setSkeletonLoading(form, false);
             if (data && data.ok) {
                 updateCartBadge(data.counts);
                 flashButton(btn, 'Added');
@@ -151,6 +171,7 @@ document.addEventListener('submit', function (event) {
             }
         })
         .catch(function () {
+            setSkeletonLoading(form, false);
             form.submit();
         });
 });
@@ -425,6 +446,74 @@ function gearroomInit() {
         syncToggleAllLabel();
     }
 
+    /* ---------- Catalog search / filter ---------- */
+    const catalogSearch = document.getElementById('catalog-search');
+    const catalogLocationFilter = document.getElementById('catalog-location-filter');
+    const catalogAvailabilityFilter = document.getElementById('catalog-availability-filter');
+    const catalogResetBtn = document.getElementById('catalog-filter-reset');
+    const catalogStatusEl = document.getElementById('catalog-filter-status');
+    if (catalogSearch || catalogLocationFilter) {
+        function getCatalogFilters() {
+            return {
+                search: (catalogSearch ? catalogSearch.value : '').trim().toLowerCase(),
+                location: catalogLocationFilter ? catalogLocationFilter.value : '',
+                availability: catalogAvailabilityFilter ? catalogAvailabilityFilter.value : ''
+            };
+        }
+        function applyCatalogFilters() {
+            const f = getCatalogFilters();
+            const sections = document.querySelectorAll('.catalog-section');
+            let totalVisible = 0;
+            sections.forEach(function (section) {
+                const rows = section.querySelectorAll('.catalog-item-row');
+                let sectionVisible = 0;
+                rows.forEach(function (row) {
+                    const location = row.getAttribute('data-location') || '';
+                    const available = parseInt(row.getAttribute('data-available') || '0', 10);
+                    const search = row.getAttribute('data-search') || '';
+                    let match = true;
+                    if (f.location && location !== f.location) match = false;
+                    if (f.availability === 'available' && available <= 0) match = false;
+                    if (f.availability === 'out' && available > 0) match = false;
+                    if (f.search && search.toLowerCase().indexOf(f.search) === -1) match = false;
+                    row.style.display = match ? '' : 'none';
+                    if (match) sectionVisible++;
+                });
+                const body = section.querySelector('.group-body');
+                if (body) {
+                    body.style.display = sectionVisible ? '' : 'none';
+                }
+                const toggle = section.querySelector('.group-toggle');
+                if (toggle && sectionVisible === 0) {
+                    toggle.setAttribute('aria-expanded', 'false');
+                }
+                totalVisible += sectionVisible;
+            });
+            if (catalogStatusEl) {
+                const noun = totalVisible === 1 ? 'item' : 'items';
+                catalogStatusEl.textContent = totalVisible + ' ' + noun + (totalVisible ? ' shown' : '');
+            }
+        }
+        if (catalogSearch) {
+            catalogSearch.addEventListener('input', applyCatalogFilters);
+        }
+        if (catalogLocationFilter) {
+            catalogLocationFilter.addEventListener('change', applyCatalogFilters);
+        }
+        if (catalogAvailabilityFilter) {
+            catalogAvailabilityFilter.addEventListener('change', applyCatalogFilters);
+        }
+        if (catalogResetBtn) {
+            catalogResetBtn.addEventListener('click', function () {
+                if (catalogSearch) catalogSearch.value = '';
+                if (catalogLocationFilter) catalogLocationFilter.value = '';
+                if (catalogAvailabilityFilter) catalogAvailabilityFilter.value = '';
+                applyCatalogFilters();
+            });
+        }
+        applyCatalogFilters();
+    }
+
     /* ---------- All items: full filter system + "+N more" ---------- */
     const allItemsTable = document.getElementById('all-items-table');
     if (allItemsTable) {
@@ -681,6 +770,17 @@ function gearroomInit() {
             const currentOpt = itemSel.querySelector('option[value="' + currentItemId + '"]');
             if (currentOpt && currentOpt.style.display === 'none') {
                 itemSel.selectedIndex = 0;
+            }
+        }
+        itemSel.disabled = !locId;
+        if (!locId) {
+            itemSel.selectedIndex = 0;
+        }
+        const condSel = row.querySelector('select[name="condition_ids"]');
+        if (condSel) {
+            condSel.disabled = !itemSel.value;
+            if (!itemSel.value) {
+                condSel.selectedIndex = 0;
             }
         }
     }
@@ -1781,6 +1881,43 @@ function gearroomInit() {
             }
         });
     });
+
+    /* ---------- Generic data-confirm for destructive actions ---------- */
+    document.addEventListener('click', function (event) {
+        const el = event.target.closest('[data-confirm]');
+        if (!el) {
+            return;
+        }
+        const msg = el.getAttribute('data-confirm');
+        if (msg && !window.confirm(msg)) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    });
+
+    /* ---------- Quick action keyboard shortcuts ---------- */
+    const homeForm = document.querySelector('#home-action-form');
+    if (homeForm) {
+        homeForm.addEventListener('keydown', function (event) {
+            if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+                event.preventDefault();
+                const slipInput = document.querySelector('#quick-view-slip');
+                const assetInput = document.querySelector('#home-scan-asset');
+                if (slipInput && slipInput.offsetParent !== null) {
+                    slipInput.focus();
+                } else if (assetInput) {
+                    assetInput.focus();
+                }
+            }
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                event.preventDefault();
+                const submitBtn = homeForm.querySelector('button[type="submit"]');
+                if (submitBtn && !submitBtn.disabled) {
+                    submitBtn.click();
+                }
+            }
+        });
+    }
 
     createCameraScanner({
         openButtonSelector: '#camera-scan-maintenance',

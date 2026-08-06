@@ -18,17 +18,17 @@
             </div>
         <div class="actions">
             {% if is_staff %}
-            <button type="button" class="button-link secondary" id="toggle-manage-items" aria-expanded="false" aria-controls="manage-maintenance-items">Manage items</button>
+            <button type="button" class="button-link secondary" id="toggle-manage-items" aria-expanded="true" aria-controls="manage-maintenance-items">Close</button>
             {% endif %}
         </div>
     </div>
 </div>
 
 {% if is_staff %}
-<div class="card" id="manage-maintenance-items" data-region="manage-maintenance" style="display:none;">
+<div class="card" id="manage-maintenance-items" data-region="manage-maintenance" {% if not is_staff %}style="display:none;"{% endif %}>
     <h3>Manage items in maintenance</h3>
     <p class="section-note">Close out each open job. <strong>Return</strong> puts the units back into available stock once fixed; <strong>Could not be fixed</strong> writes the units off (removed from total stock). Both record who closed the job and any notes.</p>
-    <div class="table-wrapper">
+    <div class="table-wrapper" aria-live="polite">
         <table>
             <thead>
                 <tr><th>Item</th><th>Qty</th><th>Location</th><th>Reported by</th><th>Expected back</th><th>Reason</th><th>Notes</th><th>Actions</th></tr>

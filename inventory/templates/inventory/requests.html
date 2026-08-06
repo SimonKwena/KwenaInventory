@@ -18,7 +18,7 @@
             </span>
         </div>
 
-        <div class="table-wrapper" data-region="pending-requests">
+        <div class="table-wrapper" data-region="pending-requests" aria-live="polite">
             {% if pending_requests %}
                 <table>
                     <thead>
@@ -98,7 +98,7 @@
             </form>
         </div>
 
-        <div class="table-wrapper" data-region="all-requests">
+        <div class="table-wrapper" data-region="all-requests" aria-live="polite">
             {% if slips %}
                 <table>
                     <thead>

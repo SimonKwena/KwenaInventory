@@ -3,18 +3,19 @@
 {% block title %}Items | Kwena Gear Room{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="action-bar">
-        <div>
-            <h2>Items</h2>
-            <p class="section-note">Add, edit, and track gear. Each item gets a QR code automatically.</p>
+    <div class="card">
+        <div class="action-bar">
+            <div>
+                <h2>Items</h2>
+                <p class="section-note">Add, edit, and track gear. Each item gets a QR code automatically.</p>
+            </div>
+            <div class="actions">
+                <a class="button-link" href="{% url 'inventory:item_create' %}">Add item</a>
+                <a class="button-link secondary" href="{% url 'inventory:stock_take_list' %}">Stock takes</a>
+            </div>
         </div>
-        <div class="actions">
-            <a class="button-link" href="{% url 'inventory:item_create' %}">Add item</a>
-            <a class="button-link secondary" href="{% url 'inventory:stock_take_list' %}">Stock takes</a>
-        </div>
+        <p class="section-note" style="margin-top:4px;">Updated {{ last_updated|date:"d M Y, H:i" }}</p>
     </div>
-</div>
 
 <div class="grid grid-2">
     <div class="card">
@@ -31,7 +32,7 @@
         <h3>Items in maintenance</h3>
         <p class="section-note">Gear currently out for repair or servicing.</p>
         <div class="scroll-area">
-            <div class="table-wrapper" data-region="maintenance-open">
+            <div class="table-wrapper" data-region="maintenance-open" aria-live="polite">
                 <table>
                     <thead>
                         <tr><th>Item</th><th>Location</th><th>Expected back</th></tr>

@@ -72,6 +72,16 @@
         </div>
 
         <div class="slip-modal-foot">
+            {% if slip_request.approval_status == "pending" and request.user.is_staff %}
+            <form method="post" action="{% url 'inventory:request_approve' slip_request.pk %}" class="slip-modal-actions">
+                {% csrf_token %}
+                <button type="submit" class="button-link">Approve</button>
+            </form>
+            <form method="post" action="{% url 'inventory:request_reject' slip_request.pk %}" class="slip-modal-actions">
+                {% csrf_token %}
+                <button type="submit" class="button-link secondary">Reject</button>
+            </form>
+            {% endif %}
             <button type="button" class="button-link secondary" data-print-target="slip-doc">Print slip</button>
             <form method="post" action="{% url 'inventory:request_email_slip' slip_request.pk %}" class="slip-email-form">
                 {% csrf_token %}

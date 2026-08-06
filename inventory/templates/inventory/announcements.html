@@ -57,7 +57,7 @@
                                 </form>
                                 <form method="post" action="{% url 'inventory:announcement_delete' update.pk %}" data-live-submit>
                                     {% csrf_token %}
-                                    <button type="submit" class="button-link danger btn-sm">Delete</button>
+                                    <button type="submit" class="button-link danger btn-sm" data-confirm="Delete this update? This cannot be undone.">Delete</button>
                                 </form>
                             </td>
                         </tr>

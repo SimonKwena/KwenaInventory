@@ -19,10 +19,11 @@
                     <div class="stat"><div class="stat-value">{{ location_count }}</div><div class="stat-label">Locations</div></div>
                     <div class="stat"><div class="stat-value">{{ announcement_count }}</div><div class="stat-label">Updates posted</div></div>
                 </div>
+                <p class="section-note" style="margin-top:10px;">Updated {{ last_updated|date:"d M Y, H:i" }}</p>
             </div>
             <div class="card dashboard-side">
                 <h3>Items currently out &amp; promised returns</h3>
-                <div class="scroll-area table-wrapper" data-region="pending-returns">
+                <div class="scroll-area table-wrapper" data-region="pending-returns" aria-live="polite">
                     <table>
                         <thead>
                             <tr><th>Item</th><th>Member</th><th>Location</th><th>Out</th><th>Expected return</th><th>Status</th></tr>
