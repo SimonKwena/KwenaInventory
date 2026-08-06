@@ -12,6 +12,8 @@ from .models import (
     RequestItem,
     Role,
     StatusOption,
+    StockTake,
+    StockTakeItem,
     Transaction,
 )
 
@@ -132,6 +134,20 @@ class MaintenanceAdmin(admin.ModelAdmin):
     list_filter = ("completed_at", "started_at")
     search_fields = ("item__name", "reason", "notes", "reported_by_name", "completed_by_name")
     autocomplete_fields = ("item",)
+
+
+@admin.register(StockTake)
+class StockTakeAdmin(admin.ModelAdmin):
+    list_display = ("pk", "location", "taken_by", "taken_at", "status", "item_count")
+    list_filter = ("status", "location", "taken_at")
+    search_fields = ("location__name", "taken_by__username")
+
+
+@admin.register(StockTakeItem)
+class StockTakeItemAdmin(admin.ModelAdmin):
+    list_display = ("stock_take", "item", "counted_quantity", "expected_quantity", "difference")
+    list_filter = ("stock_take",)
+    search_fields = ("item__name", "item__sku")
 
 
 _SETTINGS_VIEW_URL = "/admin/settings-view/"

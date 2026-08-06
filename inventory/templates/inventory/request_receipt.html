@@ -152,6 +152,9 @@
 
     <div class="actions">
         <button type="button" class="button-link secondary" data-print-target="slip-doc">Print slip</button>
+        {% if user_role == "admin" or user_role == "superadmin" %}
+        <button type="button" class="button-link secondary" data-print-target="tech-rider-doc">Print tech rider</button>
+        {% endif %}
         <form method="post" action="{% url 'inventory:request_email_slip' req.pk %}" class="slip-email-form">
             {% csrf_token %}
             <button type="submit" class="button-link secondary">Email slip</button>
@@ -266,7 +269,7 @@
                         <td>{{ line.item.name }}</td>
                         <td>{{ line.item.sku|default:"—" }}</td>
                         <td>{% if line.location %}{{ line.location.name }}{% else %}&mdash;{% endif %}</td>
-                        <td>{% if line.condition %}{{ line.condition.name }}{% elif line.item_id in return_conditions %}{{ return_conditions|get_item:line.item_id }}{% else %}&mdash;{% endif %}</td>
+                        <td>{% if line.condition %}{{ line.condition.name }}{% elif line.item_id in return_conditions %}{{ return_conditions|get_item:line.item_id }}{% elif line.item.condition %}{{ line.item.condition.name }}{% else %}&mdash;{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -346,6 +349,154 @@
                    An admin must approve the request before any stock moves.{% endif %}</p>
                 <p class="slip-doc-fineprint">Kwena Music &middot; Gear, in and out &middot; Issued {{ req.created_at|date:"Y-m-d H:i" }}</p>
             </div>
+        </div>
+    </div>
+
+    {# Print-only tech rider. Hidden on screen. #}
+    <div id="tech-rider-doc" aria-hidden="true" style="display:none">
+        <div style="font-family:'Inter',system-ui,sans-serif;max-width:780px;margin:0 auto;color:#1a1a1a;background:#fff;">
+
+            {# Top bar #}
+            <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #1a1a1a;padding-bottom:14px;margin-bottom:22px;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <img src="{% static 'images/kwena-logo-black.png' %}" alt="Kwena Music" style="width:56px;height:56px;object-fit:contain;">
+                    <div>
+                        <div style="font-size:1.2rem;font-weight:800;letter-spacing:-0.02em;line-height:1.1;">Kwena Music</div>
+                        <div style="font-size:0.72rem;letter-spacing:0.14em;text-transform:uppercase;color:#555;font-weight:600;margin-top:2px;">Tech Rider</div>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;color:#666;">Status</div>
+                    <div style="display:inline-block;padding:4px 10px;border:2px solid #1a1a1a;border-radius:3px;font-size:0.68rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin-top:3px;">
+                        {% if req.approval_status == "pending" %}Pending approval
+                        {% elif req.approval_status == "approved" and req.is_handed_over and req.is_returned %}Returned
+                        {% elif req.approval_status == "approved" and req.is_handed_over %}Collected
+                        {% elif req.approval_status == "approved" %}Approved
+                        {% else %}Rejected{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {# Meta strip #}
+            <div style="display:flex;gap:24px;margin-bottom:22px;padding:10px 14px;background:#f4f4f4;border:1px solid #e0e0e0;border-radius:3px;font-size:0.82rem;">
+                <div>
+                    <span style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;">Reference</span>
+                    <div style="font-family:'Courier New',monospace;font-weight:800;font-size:1.1rem;letter-spacing:0.08em;">{{ req.reference_code }}</div>
+                </div>
+                <div style="width:1px;background:#ddd;"></div>
+                <div>
+                    <span style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;">Type</span>
+                    <div style="font-weight:700;text-transform:uppercase;">{{ req.transaction_type|title|cut:"_" }}</div>
+                </div>
+                <div style="width:1px;background:#ddd;"></div>
+                <div>
+                    <span style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;">Issued</span>
+                    <div style="font-weight:600;">{{ req.created_at|date:"d M Y" }}</div>
+                </div>
+                <div style="width:1px;background:#ddd;"></div>
+                <div>
+                    <span style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;">Total</span>
+                    <div style="font-weight:800;">{{ req.total_quantity }} unit{{ req.total_quantity|pluralize }}</div>
+                </div>
+            </div>
+
+            {# Member block #}
+            <div style="margin-bottom:22px;">
+                <div style="font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase;color:#555;font-weight:700;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ddd;">Member</div>
+                <div style="display:flex;gap:20px;font-size:0.88rem;">
+                    <div style="flex:1;">
+                        <span style="color:#555;font-size:0.72rem;">Name</span>
+                        <div style="font-weight:700;">{{ req.person_name|default:req.user.username }}</div>
+                    </div>
+                    <div style="flex:1;">
+                        <span style="color:#555;font-size:0.72rem;">Username</span>
+                        <div style="font-weight:600;">@{{ req.user.username }}</div>
+                    </div>
+                    {% if req.user.email or req.user.guest_profile.email %}
+                    <div style="flex:1;">
+                        <span style="color:#555;font-size:0.72rem;">Email</span>
+                        <div style="font-weight:500;color:#444;">{{ req.user.email|default:req.user.guest_profile.email }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% if req.user.guest_profile %}
+                {% if req.user.guest_profile.phone %}
+                <div style="margin-top:6px;font-size:0.82rem;color:#555;">Phone: {{ req.user.guest_profile.phone }}</div>
+                {% endif %}
+                {% if req.user.guest_profile.organization %}
+                <div style="margin-top:2px;font-size:0.78rem;color:#666;">Org: {{ req.user.guest_profile.organization }}</div>
+                {% endif %}
+                {% elif req.user.user_profile %}
+                <div style="margin-top:6px;font-size:0.82rem;color:#555;">Role: {{ req.user.user_profile.get_role_display }}</div>
+                {% if req.user.user_profile.phone %}
+                <div style="margin-top:2px;font-size:0.82rem;color:#555;">Phone: {{ req.user.user_profile.phone }}</div>
+                {% endif %}
+                {% endif %}
+            </div>
+
+            {# Schedule block #}
+            {% if req.taken_at or req.expected_return %}
+            <div style="margin-bottom:22px;">
+                <div style="font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase;color:#555;font-weight:700;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ddd;">Schedule</div>
+                <div style="display:flex;gap:24px;font-size:0.86rem;">
+                    {% if req.taken_at %}
+                    <div>
+                        <span style="color:#555;font-size:0.72rem;">Pickup</span>
+                        <div style="font-weight:600;">{{ req.taken_at|date:"D d M Y, H:i" }}</div>
+                    </div>
+                    {% endif %}
+                    {% if req.expected_return %}
+                    <div>
+                        <span style="color:#555;font-size:0.72rem;">Return by</span>
+                        <div style="font-weight:600;">{{ req.expected_return|date:"D d M Y, H:i" }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {# Equipment table #}
+            <div style="margin-bottom:22px;">
+                <div style="font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase;color:#555;font-weight:700;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ddd;">Equipment</div>
+                <table style="width:100%;border-collapse:collapse;font-size:0.84rem;">
+                    <thead>
+                        <tr style="background:#1a1a1a;color:#fff;">
+                            <th style="text-align:left;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">Item</th>
+                            <th style="text-align:left;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">SKU</th>
+                            <th style="text-align:left;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">Location</th>
+                            <th style="text-align:center;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;width:36px;">Qty</th>
+                            <th style="text-align:center;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;width:36px;">Pre packed</th>
+                            <th style="text-align:center;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;width:36px;">Post Packed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line in req.items.all %}
+                        <tr style="border-bottom:1px solid #e8e8e8;">
+                            <td style="padding:6px 10px;font-weight:600;">{{ line.item.name }}</td>
+                            <td style="padding:6px 10px;color:#555;font-size:0.8rem;">{{ line.item.sku|default:"&mdash;" }}</td>
+                            <td style="padding:6px 10px;color:#444;">{% if line.location %}{{ line.location.name }}{% else %}&mdash;{% endif %}</td>
+                            <td style="padding:6px 10px;font-weight:700;text-align:center;">{{ line.quantity }}</td>
+                            <td style="padding:6px 10px;text-align:center;"><input type="checkbox" disabled style="width:16px;height:16px;cursor:pointer;"></td>
+                            <td style="padding:6px 10px;text-align:center;"><input type="checkbox" disabled style="width:16px;height:16px;cursor:pointer;"></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {# Notes #}
+            {% if req.notes %}
+            <div style="margin-bottom:22px;padding:10px 14px;border-left:3px solid #1a1a1a;background:#fafafa;">
+                <div style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:#555;font-weight:700;margin-bottom:4px;">Notes</div>
+                <p style="margin:0;font-size:0.86rem;color:#333;">{{ req.notes }}</p>
+            </div>
+            {% endif %}
+
+            {# Footer #}
+            <div style="border-top:2px solid #1a1a1a;padding-top:10px;text-align:center;">
+                <p style="margin:0;font-size:0.72rem;color:#888;">Kwena Music &middot; Tech Rider &middot; {{ req.reference_code }} &middot; Issued {{ req.created_at|date:"Y-m-d H:i" }}</p>
+            </div>
+
         </div>
     </div>
 </div>

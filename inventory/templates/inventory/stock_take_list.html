@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+
+{% block title %}Stock Takes | Kwena Gear Room{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="action-bar">
+        <div>
+            <h2>Stock Takes</h2>
+            <p class="section-note">Record and review physical inventory counts.</p>
+        </div>
+        <div class="actions">
+            <a class="button-link" href="{% url 'inventory:stock_take_create' %}">New stock take</a>
+        </div>
+    </div>
+</div>
+
+<div class="grid grid-2">
+    <div class="card">
+        <h3>At a glance</h3>
+        <p class="section-note">Snapshot of all stock take activity.</p>
+        <div class="stat-grid">
+            <div class="stat"><div class="stat-value">{{ total_takes }}</div><div class="stat-label">Total takes</div></div>
+            <div class="stat"><div class="stat-value">{{ complete_count }}</div><div class="stat-label">Complete</div></div>
+            <div class="stat"><div class="stat-value">{{ draft_count }}</div><div class="stat-label">Draft</div></div>
+            <div class="stat"><div class="stat-value">{{ total_items_counted }}</div><div class="stat-label">Items counted</div></div>
+        </div>
+        <p style="margin-top: 16px;">
+            <strong>Net discrepancy:</strong>
+            <span style="color: {% if total_discrepancy != 0 %}var(--danger){% else %}var(--success){% endif %};">
+                {{ total_discrepancy }}
+            </span>
+        </p>
+    </div>
+    <div class="card dashboard-side">
+        <h3>Recent stock takes</h3>
+        <p class="section-note">The five most recent counts.</p>
+        <div class="scroll-area">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>ID</th><th>Location</th><th>Date</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for take in recent_takes %}
+                            <tr>
+                                <td><a class="text-link" href="{% url 'inventory:stock_take_detail' pk=take.pk %}">{{ take.pk }}</a></td>
+                                <td>{{ take.location.name }}</td>
+                                <td>{{ take.taken_at|date:"Y-m-d H:i" }}</td>
+                                <td>
+                                    {% if take.is_complete %}<span class="pill pill-success">Complete</span>
+                                    {% else %}<span class="pill pill-gold">Draft</span>{% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="4">No stock takes yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <p style="margin-top:16px;">
+            <a class="button-link secondary btn-sm" href="{% url 'inventory:stock_take_list' %}">View all stock takes</a>
+        </p>
+    </div>
+</div>
+
+<div class="card">
+    <button type="button" class="collapse-toggle" aria-expanded="true">
+        <h3>All stock takes</h3>
+        <span class="collapse-icon">&#9662;</span>
+    </button>
+    <p class="section-note">Full history. Filter by location or status.</p>
+    <div class="item-filter" id="stock-take-filter">
+        <form method="get" class="item-filter-row">
+            <div class="item-filter-selects">
+                <label class="field-inline">
+                    <span>Location</span>
+                    <select id="filter-location" class="select-input" name="location">
+                        <option value="">All locations</option>
+                        {% for loc in locations %}
+                            <option value="{{ loc.name }}" {% if location_filter == loc.name %}selected{% endif %}>{{ loc.name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="field-inline">
+                    <span>Status</span>
+                    <select id="filter-status" class="select-input" name="status">
+                        <option value="">All</option>
+                        <option value="draft" {% if status_filter == "draft" %}selected{% endif %}>Draft</option>
+                        <option value="complete" {% if status_filter == "complete" %}selected{% endif %}>Complete</option>
+                    </select>
+                </label>
+                <button type="submit" class="button-link secondary btn-sm">Apply</button>
+                <a class="button-link secondary btn-sm" href="{% url 'inventory:stock_take_list' %}">Reset</a>
+            </div>
+        </form>
+    </div>
+    <div class="collapse-body">
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Location</th>
+                        <th>Taken by</th>
+                        <th>Date</th>
+                        <th>Items</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for take in stock_takes %}
+                        <tr>
+                            <td>{{ take.pk }}</td>
+                            <td>{{ take.location.name }}</td>
+                            <td>{{ take.taken_by|default:"—" }}</td>
+                            <td>{{ take.taken_at|date:"Y-m-d H:i" }}</td>
+                            <td>{{ take.item_count }}</td>
+                            <td>
+                                {% if take.is_complete %}<span class="pill pill-success">Complete</span>
+                                {% else %}<span class="pill pill-gold">Draft</span>{% endif %}
+                            </td>
+                            <td class="actions-cell">
+                                <span class="actions-inner">
+                                    <a class="button-link secondary btn-sm" href="{% url 'inventory:stock_take_detail' pk=take.pk %}">View</a>
+                                </span>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="7">No stock takes.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1471,17 +1471,53 @@ body:has(.topbar) {
 
 .item-row {
     display: grid;
-    grid-template-columns: 2fr 1fr 1.5fr 1.5fr;
+    grid-template-columns: 2fr 1fr 1.5fr 1.5fr auto;
     gap: 12px;
     align-items: end;
     margin-bottom: 12px;
 }
 
 #item-rows.hide-condition .item-row {
-    grid-template-columns: 2fr 1fr 1.5fr;
+    grid-template-columns: 2fr 1fr 1.5fr auto;
 }
 
 #item-rows.hide-condition .condition-field {
+    display: none;
+}
+
+.item-row-remove {
+    display: flex;
+    align-items: center;
+}
+
+.item-row-remove .remove-row {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    line-height: 1;
+    border-radius: var(--radius-sm);
+}
+
+.condition-all-row {
+    margin-bottom: 14px;
+}
+
+.condition-all-row .condition-all-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.condition-all-row .label {
+    font-size: 0.85rem;
+}
+
+#item-rows.hide-condition ~ .condition-all-row {
     display: none;
 }
 
@@ -1510,6 +1546,163 @@ body:has(.topbar) {
 
     .action-row #add-item-row {
         margin-left: 0;
+    }
+
+    .grid-2,
+    .grid-3,
+    .form-row-half {
+        grid-template-columns: 1fr;
+    }
+
+    .card {
+        padding: 20px;
+    }
+
+    .home-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .account-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .account-header .avatar.lg {
+        width: 48px;
+        height: 48px;
+        font-size: 1.2rem;
+    }
+
+    .account-header > .button-link {
+        align-self: flex-start;
+    }
+
+    .borrowed-item-head {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .borrowed-item-head .pill {
+        margin-left: 0;
+    }
+
+    .catalog-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .catalog-toolbar-actions {
+        width: 100%;
+    }
+
+    .catalog-toolbar-actions .button-link {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .item-filter-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .item-filter-search {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .item-filter-selects {
+        width: 100%;
+    }
+
+    .field-inline {
+        width: 100%;
+    }
+
+    .field-inline .select-input {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .search-form {
+        width: 100%;
+    }
+
+    .search-form input[type="search"] {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .dashboard-side {
+        max-height: none;
+    }
+
+    .dashboard-side .scroll-area {
+        max-height: 50vh;
+    }
+
+    .slip-code-row {
+        flex-wrap: wrap;
+    }
+
+    .slip-code-row .slip-digits {
+        min-width: 120px;
+        flex: 1 1 auto;
+    }
+
+    .notification-head {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .notification-time {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .quick-view-input {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .qr-area {
+        grid-template-columns: 1fr;
+    }
+
+    .item-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+
+    .item-tile-actions {
+        gap: 8px;
+    }
+
+    .item-tile-buttons {
+        flex-direction: column;
+    }
+
+    .item-tile-buttons .button-link {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .actions-inline {
+        flex-wrap: wrap;
+    }
+
+    .actions-inline .button-link {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
+    }
+
+    .void-form .field-input-row {
+        grid-template-columns: 1fr;
+    }
+
+    .void-reason {
+        min-width: 0;
     }
 }
 
@@ -3097,6 +3290,51 @@ tbody tr:last-child td {
     .detail-row { flex-wrap: wrap; gap: 2px 12px; }
     .detail-row dt { flex: 0 0 110px; }
     .detail-row dd { flex: 1 1 100%; }
+
+    .container {
+        padding: 12px 0 24px;
+    }
+
+    .card {
+        padding: 16px;
+        margin-bottom: 14px;
+    }
+
+    .card h2 {
+        font-size: 1.2rem;
+    }
+
+    .card h3 {
+        font-size: 1.05rem;
+    }
+
+    .item-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stat-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+    }
+
+    .action-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .action-bar .actions {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .action-bar .button-link {
+        flex: 1 1 auto;
+        text-align: center;
+    }
 }
 
 @media (max-width: 360px) {

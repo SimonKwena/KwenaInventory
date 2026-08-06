@@ -605,6 +605,8 @@ function gearroomInit() {
     const transactionTypeRadios = document.querySelectorAll('input[name="transaction_type"]');
     const addItemRow = document.querySelector('#add-item-row');
     const itemRowsContainer = document.querySelector('#item-rows');
+    const condAllRow = document.querySelector('#condition-all-row');
+    const condAllSelect = document.querySelector('#condition-all');
     const checkinLoanField = document.querySelector('#checkin-loan-field');
     const slipInputRow = document.querySelector('#slip-input-row');
     const notesLabel = document.querySelector('#notes-label');
@@ -672,7 +674,7 @@ function gearroomInit() {
                 opt.style.display = '';
                 return;
             }
-            const match = !locId || opt.getAttribute('data-location-id') === locId;
+            const match = !!locId && opt.getAttribute('data-location-id') === locId;
             opt.style.display = match ? '' : 'none';
         });
         if (currentItemId) {
@@ -681,6 +683,20 @@ function gearroomInit() {
                 itemSel.selectedIndex = 0;
             }
         }
+    }
+
+    function syncRemoveButtonStates() {
+        if (!itemRowsContainer) {
+            return;
+        }
+        const rows = itemRowsContainer.querySelectorAll('.item-row');
+        const showRemove = rows.length > 1;
+        rows.forEach(function (row) {
+            const btn = row.querySelector('.remove-row');
+            if (btn) {
+                btn.style.display = showRemove ? '' : 'none';
+            }
+        });
     }
 
     function applyLoanToForm() {
@@ -718,7 +734,8 @@ function gearroomInit() {
                 '<div><label class="label">Item</label>' +
                 '<select name="item_ids">' + itemOptions + '</select></div>' +
                 '<div><label class="label">Quantity</label><input type="number" name="quantities" value="1" min="1"></div>' +
-                '<div class="condition-field"><label class="label">Condition</label><select name="condition_ids">' + condOptions + '</select></div>';
+                '<div class="condition-field"><label class="label">Condition</label><select name="condition_ids">' + condOptions + '</select></div>' +
+                '<div class="item-row-remove"><button type="button" class="button-link danger btn-sm remove-row" aria-label="Remove this item row" title="Remove this item row"><span aria-hidden="true">&times;</span></button></div>';
             itemRowsContainer.appendChild(row);
             const locSel = row.querySelector('select[name="location_ids"]');
             const itemSel = row.querySelector('select[name="item_ids"]');
@@ -734,6 +751,22 @@ function gearroomInit() {
             }
             filterItemsByLocation(row);
         });
+        syncRemoveButtonStates();
+        // Fill the slip code input from the loan's reference code so the form
+        // can submit (the slip code is required for member check-ins). The
+        // reference code is "KW-0042"; the input accepts just the 4 digits.
+        const code = opt.getAttribute('data-code') || '';
+        const slipInput = document.querySelector('#quick-view-slip');
+        if (slipInput && code) {
+            const digits = code.replace(/^KW-/, '').trim();
+            slipInput.value = digits;
+        }
+        // Also set the hidden source_request_id for admin check-ins so the
+        // server knows exactly which loan was returned.
+        const sourceHidden = document.querySelector('#home-source-request-id');
+        if (sourceHidden && select.value) {
+            sourceHidden.value = select.value;
+        }
         // A loan was chosen, so lock the item/quantity/location/dates; only
         // Condition and Notes remain editable. (Do NOT call updateActionFields
         // here — it would recurse back into applyLoanToForm and the lock below
@@ -817,6 +850,13 @@ function gearroomInit() {
         if (addBtn) {
             addBtn.classList.toggle('locked', locked);
             addBtn.disabled = locked;
+        }
+        if (itemRowsContainer) {
+            itemRowsContainer.querySelectorAll('.remove-row').forEach(function (btn) {
+                btn.disabled = locked;
+                btn.style.visibility = locked ? 'hidden' : '';
+            });
+            syncRemoveButtonStates();
         }
     }
 
@@ -903,6 +943,13 @@ function gearroomInit() {
             itemRowsContainer.classList.toggle('hide-condition', !isCheckIn);
             applyConditionRequirement(isCheckIn);
         }
+        if (condAllRow) {
+            const isCheckIn = action === 'check_in';
+            condAllRow.style.display = isCheckIn ? '' : 'none';
+            if (!isCheckIn && condAllSelect) {
+                condAllSelect.value = '';
+            }
+        }
         // The staff slip-code input shows only for check-out / check-in actions.
         if (slipInputRow) {
             slipInputRow.style.display = (action === 'check_out' || action === 'check_in') ? '' : 'none';
@@ -951,19 +998,67 @@ function gearroomInit() {
         updateActionFields();
     }
 
-    if (itemRowsContainer) {
-        itemRowsContainer.addEventListener('change', function (event) {
-            if (event.target && event.target.matches('select[name="item_ids"]')) {
-                filterCheckinLoans();
-            }
-            if (event.target && event.target.matches('select[name="location_ids"]')) {
-                const row = event.target.closest('.item-row');
-                if (row) {
-                    filterItemsByLocation(row);
+        if (itemRowsContainer) {
+            itemRowsContainer.addEventListener('change', function (event) {
+                if (event.target && event.target.matches('select[name="item_ids"]')) {
+                    filterCheckinLoans();
                 }
-            }
-        });
-    }
+                if (event.target && event.target.matches('select[name="location_ids"]')) {
+                    const row = event.target.closest('.item-row');
+                    if (row) {
+                        filterItemsByLocation(row);
+                    }
+                }
+            });
+            itemRowsContainer.addEventListener('click', function (event) {
+                const btn = event.target.closest('.remove-row');
+                if (!btn) {
+                    return;
+                }
+                const row = btn.closest('.item-row');
+                if (!row) {
+                    return;
+                }
+                const allRows = itemRowsContainer.querySelectorAll('.item-row');
+                if (allRows.length <= 1) {
+                    row.querySelectorAll('select, input').forEach(function (f) {
+                        if (f.tagName === 'SELECT') {
+                            f.selectedIndex = 0;
+                        } else if (f.tagName === 'INPUT' && f.type === 'number') {
+                            f.value = f.getAttribute('data-default') || '1';
+                        }
+                    });
+                    filterItemsByLocation(row);
+                    if (condAllSelect) {
+                        condAllSelect.value = '';
+                    }
+                    return;
+                }
+                row.remove();
+                syncRemoveButtonStates();
+                if (typeof filterCheckinLoans === 'function') {
+                    filterCheckinLoans();
+                }
+            });
+            itemRowsContainer.querySelectorAll('.item-row').forEach(filterItemsByLocation);
+            syncRemoveButtonStates();
+        }
+
+        if (condAllSelect) {
+            condAllSelect.addEventListener('change', function () {
+                const val = condAllSelect.value;
+                if (!val) {
+                    return;
+                }
+                if (itemRowsContainer) {
+                    itemRowsContainer.querySelectorAll('select[name="condition_ids"]').forEach(function (sel) {
+                        sel.value = val;
+                    });
+                }
+                condAllSelect.value = '';
+            });
+        }
+
 
     const sourceRequestSelect = document.querySelector('#source-request-id');
     if (sourceRequestSelect) {
@@ -974,6 +1069,14 @@ function gearroomInit() {
                 setLoanLock(false);
                 if (itemRowsContainer) {
                     resetItemRows();
+                }
+                const slipInput = document.querySelector('#quick-view-slip');
+                if (slipInput) {
+                    slipInput.value = '';
+                }
+                const sourceHidden = document.querySelector('#home-source-request-id');
+                if (sourceHidden) {
+                    sourceHidden.value = '';
                 }
             }
             // Refresh field visibility/required state. This no longer recurses
@@ -991,6 +1094,20 @@ function gearroomInit() {
         }
         const rows = itemRowsContainer.querySelectorAll('.item-row');
         if (rows.length <= 1) {
+            rows.forEach(function (row) {
+                const select = row.querySelector('select[name="item_ids"]');
+                const quantity = row.querySelector('input[name="quantities"]');
+                const location = row.querySelector('select[name="location_ids"]');
+                const condition = row.querySelector('select[name="condition_ids"]');
+                if (select) select.selectedIndex = 0;
+                if (quantity) quantity.value = '1';
+                if (location) location.selectedIndex = 0;
+                if (condition) condition.selectedIndex = 0;
+                filterItemsByLocation(row);
+            });
+            if (condAllSelect) {
+                condAllSelect.value = '';
+            }
             return;
         }
         rows.forEach((row, index) => {
@@ -1008,6 +1125,10 @@ function gearroomInit() {
             }
             row.remove();
         });
+        if (condAllSelect) {
+            condAllSelect.value = '';
+        }
+        syncRemoveButtonStates();
     }
 
     const homeForm = document.querySelector('#home-action-form');
@@ -1028,6 +1149,11 @@ function gearroomInit() {
                 row.querySelectorAll('input[type="hidden"][data-mirror]').forEach(function (m) {
                     m.remove();
                 });
+                const removeBtn = row.querySelector('.remove-row');
+                if (removeBtn) {
+                    removeBtn.disabled = false;
+                    removeBtn.style.visibility = '';
+                }
             });
             if (checkinLoanField) {
                 const loanSel = checkinLoanField.querySelector('select[name="source_request_id"]');
@@ -1039,6 +1165,7 @@ function gearroomInit() {
             if (typeof updateActionFields === 'function') {
                 updateActionFields();
             }
+            syncRemoveButtonStates();
         });
     }
     if (addItemRow && itemRowsContainer) {
@@ -1066,6 +1193,7 @@ function gearroomInit() {
             }
             filterItemsByLocation(clone);
             itemRowsContainer.appendChild(clone);
+            syncRemoveButtonStates();
         });
     }
 
@@ -1179,7 +1307,8 @@ function gearroomInit() {
                         '<div><label class="label">Item <span class="required-star">*</span></label>' +
                         '<select name="item_ids" required>' + itemOptions + '</select></div>' +
                         '<div><label class="label">Quantity <span class="required-star">*</span></label><input type="number" name="quantities" value="1" min="1" required></div>' +
-                        '<div class="condition-field"><label class="label">Condition</label><select name="condition_ids">' + condOptions + '</select></div>';
+                        '<div class="condition-field"><label class="label">Condition</label><select name="condition_ids">' + condOptions + '</select></div>' +
+                        '<div class="item-row-remove"><button type="button" class="button-link danger btn-sm remove-row" aria-label="Remove this item row" title="Remove this item row"><span aria-hidden="true">&times;</span></button></div>';
                     rowsContainer.appendChild(row);
                     const locSel = row.querySelector('select[name="location_ids"]');
                     const itemSel = row.querySelector('select[name="item_ids"]');
@@ -1189,6 +1318,7 @@ function gearroomInit() {
                     if (qtyInput) qtyInput.value = it.quantity || '1';
                     filterItemsByLocation(row);
                 });
+                syncRemoveButtonStates();
                 if (typeof updateActionFields === 'function') {
                     updateActionFields();
                 }
@@ -1219,29 +1349,34 @@ function gearroomInit() {
                 // control is disabled and a hidden input carries the real name +
                 // value. Condition stays editable so staff can record the return
                 // state.
-                rowsContainer.querySelectorAll('.item-row').forEach(function (row) {
-                    row.classList.add('prefilled');
-                    ['item_ids', 'quantities', 'location_ids'].forEach(function (name) {
-                        const field = row.querySelector('[name="' + name + '"]');
-                        if (!field) {
-                            return;
-                        }
-                        const realName = field.getAttribute('data-real-name') || field.name;
-                        field.setAttribute('data-real-name', realName);
-                        field.classList.add('locked');
-                        field.disabled = true;
-                        const old = field.parentNode.querySelector('input[type="hidden"][data-mirror="' + realName + '"]');
-                        if (old) {
-                            old.remove();
-                        }
-                        const mirror = document.createElement('input');
-                        mirror.type = 'hidden';
-                        mirror.name = realName;
-                        mirror.value = field.value;
-                        mirror.setAttribute('data-mirror', realName);
-                        field.parentNode.appendChild(mirror);
-                    });
-                });
+                 rowsContainer.querySelectorAll('.item-row').forEach(function (row) {
+                     row.classList.add('prefilled');
+                     ['item_ids', 'quantities', 'location_ids'].forEach(function (name) {
+                         const field = row.querySelector('[name="' + name + '"]');
+                         if (!field) {
+                             return;
+                         }
+                         const realName = field.getAttribute('data-real-name') || field.name;
+                         field.setAttribute('data-real-name', realName);
+                         field.classList.add('locked');
+                         field.disabled = true;
+                         const old = field.parentNode.querySelector('input[type="hidden"][data-mirror="' + realName + '"]');
+                         if (old) {
+                             old.remove();
+                         }
+                         const mirror = document.createElement('input');
+                         mirror.type = 'hidden';
+                         mirror.name = realName;
+                         mirror.value = field.value;
+                         mirror.setAttribute('data-mirror', realName);
+                         field.parentNode.appendChild(mirror);
+                     });
+                     const removeBtn = row.querySelector('.remove-row');
+                     if (removeBtn) {
+                         removeBtn.disabled = true;
+                         removeBtn.style.visibility = 'hidden';
+                     }
+                 });
             }
 
             function selectAction(type) {

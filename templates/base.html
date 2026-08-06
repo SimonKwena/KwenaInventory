@@ -9,9 +9,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/site.css' %}?v=41">
+    <link rel="stylesheet" href="{% static 'css/site.css' %}?v=42">
     <script defer src="{% static 'js/vendor/jsQR.min.js' %}?v=1"></script>
-    <script defer src="{% static 'js/site.js' %}?v=43"></script>
+    <script defer src="{% static 'js/site.js' %}?v=44"></script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -45,7 +45,7 @@
                                          </button>
                                          <div class="nav-dropdown-menu" id="manage-menu" role="menu" aria-labelledby="manage-toggle" hidden>
                                                {% if user_role == "admin" or user_role == "superadmin" %}
-                                               <a class="nav-dropdown-link {% if '/inventory/items/' in request.path %}is-active{% endif %}" href="{% url 'inventory:item_list' %}" role="menuitem">Items</a>
+                                                <a class="nav-dropdown-link {% if '/inventory/items/' in request.path %}is-active{% endif %}" href="{% url 'inventory:item_list' %}" role="menuitem">Items</a>
                                                <a class="nav-dropdown-link {% if request.path == '/inventory/announcements/' %}is-active{% endif %}" href="{% url 'inventory:announcements' %}" role="menuitem">Updates</a>
                                                   {% if request.user.is_superuser %}
                                                <a class="nav-dropdown-link {% if request.path == '/inventory/admin/users/' %}is-active{% endif %}" href="{% url 'admin_users' %}" role="menuitem">Users</a>
@@ -143,5 +143,6 @@
             Kwena Music &middot; Gear, in and out &middot; Made by Simon
         </footer>
     </div>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

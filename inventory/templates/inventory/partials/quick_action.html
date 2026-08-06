@@ -69,44 +69,60 @@
                 </div>
             {% endif %}
             </div>
-            <div id="item-rows">
-                <div class="item-row">
-                    <div>
-                        <label class="label">Location <span class="required-star">*</span></label>
-                        <select name="location_ids" required>
-                            <option value="">Choose a location</option>
-                            {% for location in locations %}
-                                <option value="{{ location.id }}">{{ location.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="label">Item <span class="required-star">*</span></label>
-                        <select name="item_ids" required>
-                            <option value="">Choose an item</option>
-                            {% for item in items %}
-                                <option value="{{ item.id }}" data-location-id="{{ item.location.id }}">{{ item.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="label">Quantity <span class="required-star">*</span></label>
-                        <input type="number" name="quantities" value="1" min="1" required>
-                    </div>
-                    <div class="condition-field">
-                        <label class="label">Condition</label>
-                        <select name="condition_ids">
-                            <option value="">No update</option>
-                            {% for condition in conditions %}
-                                <option value="{{ condition.id }}">{{ condition.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-            </div>
-            <div class="action-row">
-                <button type="button" id="add-item-row" class="button-link secondary btn-sm">Add item</button>
-            </div>
+             <div id="item-rows">
+                 <div class="item-row">
+                     <div>
+                         <label class="label">Location <span class="required-star">*</span></label>
+                         <select name="location_ids" required>
+                             <option value="">Choose a location</option>
+                             {% for location in locations %}
+                                 <option value="{{ location.id }}">{{ location.name }}</option>
+                             {% endfor %}
+                         </select>
+                     </div>
+                     <div>
+                         <label class="label">Item <span class="required-star">*</span></label>
+                         <select name="item_ids" required>
+                             <option value="">Choose an item</option>
+                             {% for item in items %}
+                                 <option value="{{ item.id }}" data-location-id="{{ item.location.id }}">{{ item.name }}</option>
+                             {% endfor %}
+                         </select>
+                     </div>
+                     <div>
+                         <label class="label">Quantity <span class="required-star">*</span></label>
+                         <input type="number" name="quantities" value="1" min="1" required>
+                     </div>
+                     <div class="condition-field">
+                         <label class="label">Condition</label>
+                         <select name="condition_ids">
+                             <option value="">No update</option>
+                             {% for condition in conditions %}
+                                 <option value="{{ condition.id }}">{{ condition.name }}</option>
+                             {% endfor %}
+                         </select>
+                     </div>
+                     <div class="item-row-remove">
+                         <button type="button" class="button-link danger btn-sm remove-row" aria-label="Remove this item row" title="Remove this item row">
+                             <span aria-hidden="true">&times;</span>
+                         </button>
+                     </div>
+                 </div>
+             </div>
+             <div id="condition-all-row" style="display:none;">
+                 <div class="condition-all-field">
+                     <label class="label">Condition <span class="required-star">*</span></label>
+                     <select name="condition_all" id="condition-all">
+                         <option value="">Set condition for all items</option>
+                         {% for condition in conditions %}
+                             <option value="{{ condition.id }}">{{ condition.name }}</option>
+                         {% endfor %}
+                     </select>
+                 </div>
+             </div>
+             <div class="action-row">
+                 <button type="button" id="add-item-row" class="button-link secondary btn-sm">Add item</button>
+             </div>
             <input type="hidden" name="asset_tag" id="home-scan-asset">
             <input type="hidden" name="hand_over_request_id" id="home-hand-over-id">
             {% if is_admin_quick_action %}

@@ -44,10 +44,9 @@ class GuestProfileForm(forms.ModelForm):
 
 class GuestLoginForm(forms.Form):
     name = forms.CharField(max_length=150, label="Full name")
-    email = forms.EmailField(required=False, label="Email")
-    phone = forms.CharField(max_length=30, required=False, label="Phone")
+    email = forms.EmailField(label="Email")
+    phone = forms.CharField(max_length=30, label="Phone")
     organization = forms.CharField(max_length=150, required=False, label="Organization")
-    notes = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), required=False, label="Purpose")
 
 
 class TransactionForm(forms.Form):

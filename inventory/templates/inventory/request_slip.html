@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {% load inventory_extras %}
 
 {% block title %}Slip {{ code }} | Kwena Gear Room{% endblock %}
@@ -226,6 +227,14 @@
                     </form>
                 {% endif %}
                 <a class="button-link secondary btn-sm" href="{% url 'inventory:request_edit' slip.pk %}">Edit</a>
+                {% if user_role == "admin" or user_role == "superadmin" %}
+                <button type="button" class="button-link secondary btn-sm" data-print-target="slip-doc">Print slip</button>
+                <button type="button" class="button-link secondary btn-sm" data-print-target="tech-rider-doc">Print tech rider</button>
+                <form method="post" action="{% url 'inventory:request_email_slip' slip.pk %}" class="slip-email-form" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="button-link secondary btn-sm">Email slip</button>
+                </form>
+                {% endif %}
             </div>
 
             <form method="post" action="{% url 'inventory:request_void' slip.pk %}" class="void-form">
@@ -242,6 +251,278 @@
                 </div>
             </form>
         {% endif %}
+    </div>
+
+    {# Print-only receipt-style slip. Hidden on screen. #}
+    <div class="slip-doc" id="slip-doc" aria-hidden="true" style="display:none">
+        <div class="slip-doc-inner">
+            <div class="slip-doc-header">
+                <img class="slip-doc-logo" src="{% static 'images/kwena-logo.png' %}" alt="Kwena Music">
+                <div class="slip-doc-brand">
+                    <span class="slip-doc-brand-name">Kwena Music</span>
+                    <span class="slip-doc-brand-sub">Inventory Slip</span>
+                </div>
+                <div class="slip-doc-status-chip">
+                    {% if slip.approval_status == "pending" %}Pending approval
+                    {% elif slip.approval_status == "approved" and slip.is_handed_over and slip.is_returned %}Returned
+                    {% elif slip.approval_status == "approved" and slip.is_handed_over %}Collected
+                    {% elif slip.approval_status == "approved" %}Approved
+                    {% else %}Rejected{% endif %}
+                </div>
+            </div>
+
+            <div class="slip-doc-coderow">
+                <span class="slip-doc-code-label">Slip code</span>
+                <span class="slip-doc-code">{{ slip.reference_code }}</span>
+                <span class="slip-doc-type">{{ slip.transaction_type|title|cut:"_" }}</span>
+            </div>
+
+            <div class="slip-doc-member">
+                <div class="slip-doc-member-head">Member details</div>
+                <table class="slip-doc-member-grid">
+                    <colgroup>
+                        <col class="slip-doc-member-label">
+                        <col>
+                        <col class="slip-doc-member-label">
+                        <col>
+                    </colgroup>
+                    <tr>
+                        <th>Name</th>
+                        <td>{{ slip.person_name|default:slip.user.username }}</td>
+                        <th>Username</th>
+                        <td>{{ slip.user.username }}</td>
+                    </tr>
+                    {% if slip.user.email or slip.user.guest_profile.email %}
+                    <tr>
+                        <th>Email</th>
+                        <td colspan="3">{{ slip.user.email|default:slip.user.guest_profile.email }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if slip.user.guest_profile %}
+                    {% if slip.user.guest_profile.phone %}
+                    <tr>
+                        <th>Phone</th>
+                        <td>{{ slip.user.guest_profile.phone }}</td>
+                        <th>Org</th>
+                        <td>{{ slip.user.guest_profile.organization|default:"&mdash;" }}</td>
+                    </tr>
+                    {% endif %}
+                    {% elif slip.user.user_profile %}
+                    <tr>
+                        <th>Role</th>
+                        <td>{{ slip.user.user_profile.get_role_display }}</td>
+                        {% if slip.user.user_profile.phone %}
+                        <th>Phone</th>
+                        <td>{{ slip.user.user_profile.phone }}</td>
+                        {% else %}
+                        <td colspan="2">&mdash;</td>
+                        {% endif %}
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+
+            <table class="slip-doc-meta">
+                <tr>
+                    <th>Requested</th>
+                    <td>{{ slip.created_at|date:"D d M Y, H:i" }}</td>
+                    <th>Items</th>
+                    <td>{{ slip.total_quantity }} unit(s)</td>
+                </tr>
+                {% if slip.taken_at or slip.expected_return %}
+                <tr>
+                    <th>Pickup</th>
+                    <td>{% if slip.taken_at %}{{ slip.taken_at|date:"D d M Y, H:i" }}{% else %}&mdash;{% endif %}</td>
+                    <th>Return</th>
+                    <td>{% if slip.expected_return %}{{ slip.expected_return|date:"D d M Y, H:i" }}{% else %}&mdash;{% endif %}</td>
+                </tr>
+                {% endif %}
+            </table>
+
+            <div class="slip-doc-section-label">Items</div>
+            <table class="slip-doc-items">
+                <thead>
+                    <tr>
+                        <th class="slip-doc-qty">Qty</th>
+                        <th>Item</th>
+                        <th>SKU</th>
+                        <th>Location</th>
+                        <th>Condition</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in slip.items.all %}
+                    <tr>
+                        <td class="slip-doc-qty">{{ line.quantity }}</td>
+                        <td>{{ line.item.name }}</td>
+                        <td>{{ line.item.sku|default:"&mdash;" }}</td>
+                        <td>{% if line.location %}{{ line.location.name }}{% else %}&mdash;{% endif %}</td>
+                        <td>{% if line.condition %}{{ line.condition.name }}{% elif line.item_id in return_conditions %}{{ return_conditions|get_item:line.item_id }}{% else %}&mdash;{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td class="slip-doc-qty">{{ slip.total_quantity }}</td>
+                        <td colspan="4">Total units</td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            {% if slip.notes %}
+            <div class="slip-doc-notes">
+                <span class="slip-doc-notes-label">Notes</span>
+                <p>{{ slip.notes }}</p>
+            </div>
+            {% endif %}
+
+            <div class="slip-doc-foot">
+                <p class="slip-doc-foot-note">Show this slip code at the counter when you collect or return the gear.{% if slip.approval_status == "pending" %}
+                   An admin must approve the request before any stock moves.{% endif %}</p>
+                <p class="slip-doc-fineprint">Kwena Music &middot; Gear, in and out &middot; Issued {{ slip.created_at|date:"Y-m-d H:i" }}</p>
+            </div>
+        </div>
+    </div>
+
+    {# Print-only tech rider. Hidden on screen. #}
+    <div id="tech-rider-doc" aria-hidden="true" style="display:none">
+        <div style="font-family:'Inter',system-ui,sans-serif;max-width:780px;margin:0 auto;color:#1a1a1a;background:#fff;">
+
+            <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #1a1a1a;padding-bottom:14px;margin-bottom:22px;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <img src="{% static 'images/kwena-logo-black.png' %}" alt="Kwena Music" style="width:56px;height:56px;object-fit:contain;">
+                    <div>
+                        <div style="font-size:1.2rem;font-weight:800;letter-spacing:-0.02em;line-height:1.1;">Kwena Music</div>
+                        <div style="font-size:0.72rem;letter-spacing:0.14em;text-transform:uppercase;color:#555;font-weight:600;margin-top:2px;">Tech Rider</div>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;color:#666;">Status</div>
+                    <div style="display:inline-block;padding:4px 10px;border:2px solid #1a1a1a;border-radius:3px;font-size:0.68rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin-top:3px;">
+                        {% if slip.approval_status == "pending" %}Pending approval
+                        {% elif slip.approval_status == "approved" and slip.is_handed_over and slip.is_returned %}Returned
+                        {% elif slip.approval_status == "approved" and slip.is_handed_over %}Collected
+                        {% elif slip.approval_status == "approved" %}Approved
+                        {% else %}Rejected{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:flex;gap:24px;margin-bottom:22px;padding:10px 14px;background:#f4f4f4;border:1px solid #e0e0e0;border-radius:3px;font-size:0.82rem;">
+                <div>
+                    <span style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;">Reference</span>
+                    <div style="font-family:'Courier New',monospace;font-weight:800;font-size:1.1rem;letter-spacing:0.08em;">{{ slip.reference_code }}</div>
+                </div>
+                <div style="width:1px;background:#ddd;"></div>
+                <div>
+                    <span style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;">Type</span>
+                    <div style="font-weight:700;text-transform:uppercase;">{{ slip.transaction_type|title|cut:"_" }}</div>
+                </div>
+                <div style="width:1px;background:#ddd;"></div>
+                <div>
+                    <span style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;">Issued</span>
+                    <div style="font-weight:600;">{{ slip.created_at|date:"d M Y" }}</div>
+                </div>
+                <div style="width:1px;background:#ddd;"></div>
+                <div>
+                    <span style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;">Total</span>
+                    <div style="font-weight:800;">{{ slip.total_quantity }} unit{{ slip.total_quantity|pluralize }}</div>
+                </div>
+            </div>
+
+            <div style="margin-bottom:22px;">
+                <div style="font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase;color:#555;font-weight:700;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ddd;">Member</div>
+                <div style="display:flex;gap:20px;font-size:0.88rem;">
+                    <div style="flex:1;">
+                        <span style="color:#555;font-size:0.72rem;">Name</span>
+                        <div style="font-weight:700;">{{ slip.person_name|default:slip.user.username }}</div>
+                    </div>
+                    <div style="flex:1;">
+                        <span style="color:#555;font-size:0.72rem;">Username</span>
+                        <div style="font-weight:600;">@{{ slip.user.username }}</div>
+                    </div>
+                    {% if slip.user.email or slip.user.guest_profile.email %}
+                    <div style="flex:1;">
+                        <span style="color:#555;font-size:0.72rem;">Email</span>
+                        <div style="font-weight:500;color:#444;">{{ slip.user.email|default:slip.user.guest_profile.email }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% if slip.user.guest_profile %}
+                {% if slip.user.guest_profile.phone %}
+                <div style="margin-top:6px;font-size:0.82rem;color:#555;">Phone: {{ slip.user.guest_profile.phone }}</div>
+                {% endif %}
+                {% if slip.user.guest_profile.organization %}
+                <div style="margin-top:2px;font-size:0.78rem;color:#666;">Org: {{ slip.user.guest_profile.organization }}</div>
+                {% endif %}
+                {% elif slip.user.user_profile %}
+                <div style="margin-top:6px;font-size:0.82rem;color:#555;">Role: {{ slip.user.user_profile.get_role_display }}</div>
+                {% if slip.user.user_profile.phone %}
+                <div style="margin-top:2px;font-size:0.82rem;color:#555;">Phone: {{ slip.user.user_profile.phone }}</div>
+                {% endif %}
+                {% endif %}
+            </div>
+
+            {% if slip.taken_at or slip.expected_return %}
+            <div style="margin-bottom:22px;">
+                <div style="font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase;color:#555;font-weight:700;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ddd;">Schedule</div>
+                <div style="display:flex;gap:24px;font-size:0.86rem;">
+                    {% if slip.taken_at %}
+                    <div>
+                        <span style="color:#555;font-size:0.72rem;">Pickup</span>
+                        <div style="font-weight:600;">{{ slip.taken_at|date:"D d M Y, H:i" }}</div>
+                    </div>
+                    {% endif %}
+                    {% if slip.expected_return %}
+                    <div>
+                        <span style="color:#555;font-size:0.72rem;">Return by</span>
+                        <div style="font-weight:600;">{{ slip.expected_return|date:"D d M Y, H:i" }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div style="margin-bottom:22px;">
+                <div style="font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase;color:#555;font-weight:700;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ddd;">Equipment</div>
+                <table style="width:100%;border-collapse:collapse;font-size:0.84rem;">
+                    <thead>
+                        <tr style="background:#1a1a1a;color:#fff;">
+                            <th style="text-align:left;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">Item</th>
+                            <th style="text-align:left;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">SKU</th>
+                            <th style="text-align:left;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">Location</th>
+                            <th style="text-align:center;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;width:36px;">Qty</th>
+                            <th style="text-align:center;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;width:36px;">Pre packed</th>
+                            <th style="text-align:center;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;width:36px;">Post Packed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line in slip.items.all %}
+                        <tr style="border-bottom:1px solid #e8e8e8;">
+                            <td style="padding:6px 10px;font-weight:600;">{{ line.item.name }}</td>
+                            <td style="padding:6px 10px;color:#555;font-size:0.8rem;">{{ line.item.sku|default:"&mdash;" }}</td>
+                            <td style="padding:6px 10px;color:#444;">{% if line.location %}{{ line.location.name }}{% else %}&mdash;{% endif %}</td>
+                            <td style="padding:6px 10px;font-weight:700;text-align:center;">{{ line.quantity }}</td>
+                            <td style="padding:6px 10px;text-align:center;"><input type="checkbox" disabled style="width:16px;height:16px;cursor:pointer;"></td>
+                            <td style="padding:6px 10px;text-align:center;"><input type="checkbox" disabled style="width:16px;height:16px;cursor:pointer;"></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if slip.notes %}
+            <div style="margin-bottom:22px;padding:10px 14px;border-left:3px solid #1a1a1a;background:#fafafa;">
+                <div style="font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:#555;font-weight:700;margin-bottom:4px;">Notes</div>
+                <p style="margin:0;font-size:0.86rem;color:#333;">{{ slip.notes }}</p>
+            </div>
+            {% endif %}
+
+            <div style="border-top:2px solid #1a1a1a;padding-top:10px;text-align:center;">
+                <p style="margin:0;font-size:0.72rem;color:#888;">Kwena Music &middot; Tech Rider &middot; {{ slip.reference_code }} &middot; Issued {{ slip.created_at|date:"Y-m-d H:i" }}</p>
+            </div>
+
+        </div>
     </div>
 </div>
 {% endblock %}

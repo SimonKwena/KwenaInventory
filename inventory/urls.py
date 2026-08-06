@@ -54,4 +54,7 @@ urlpatterns = [
     path("items/new/", views.item_create, name="item_create"),
     path("items/<int:pk>/edit/", views.item_edit, name="item_edit"),
     path("items/<int:pk>/", views.item_detail, name="item_detail"),
+    path("stock-takes/", views.stock_take_list, name="stock_take_list"),
+    path("stock-takes/new/", views.stock_take_create, name="stock_take_create"),
+    path("stock-takes/<int:pk>/", views.stock_take_detail, name="stock_take_detail"),
 ]

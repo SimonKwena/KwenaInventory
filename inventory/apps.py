@@ -6,6 +6,6 @@ class InventoryConfig(AppConfig):
     name = "inventory"
 
     def ready(self):
-        from . import live_signals
+        from . import live_signals, signals
 
         live_signals.connect()

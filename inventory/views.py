@@ -36,6 +36,8 @@ from .models import (
     Maintenance,
     Notification,
     Request,
+    StockTake,
+    StockTakeItem,
     Transaction,
     display_name,
     notify_transaction_change,
@@ -573,13 +575,11 @@ def guest_login(request):
                 "email": form.cleaned_data["email"],
                 "phone": form.cleaned_data["phone"],
                 "organization": form.cleaned_data["organization"],
-                "notes": form.cleaned_data["notes"],
             })
             profile.full_name = form.cleaned_data["name"]
             profile.email = form.cleaned_data["email"]
             profile.phone = form.cleaned_data["phone"]
             profile.organization = form.cleaned_data["organization"]
-            profile.notes = form.cleaned_data["notes"]
             profile.save()
             user.backend = "django.contrib.auth.backends.ModelBackend"
             auth_login(request, user)
@@ -1552,6 +1552,13 @@ def request_slip(request, code):
         # Legacy return recorded straight on the loan with nothing to void.
         slip_events.append({"type": "legacy_return", "when": loan.returned_at})
     slip_events.sort(key=lambda e: e["when"] or loan.created_at)
+    # Map each item to the condition it was returned in, so the print slip
+    # can show the return condition on the Items table (loan lines have none).
+    return_conditions = {}
+    for ret in loan.returns.all():
+        for rline in ret.items.all():
+            if rline.condition_id:
+                return_conditions[rline.item_id] = rline.condition.name
     return render(
         request,
         "inventory/request_slip.html",
@@ -1563,6 +1570,7 @@ def request_slip(request, code):
             "code": code,
             "slip_label": label,
             "slip_pill": pill,
+            "return_conditions": return_conditions,
         },
     )
 
@@ -2316,3 +2324,169 @@ def _escape_attr(value):
     if value is None:
         return ""
     return (str(value).replace("&", "&amp;").replace('"', "&quot;"))
+
+
+@user_passes_test(lambda user: user.is_staff)
+def stock_take_list(request):
+    """Overview page for stock takes: stats + filtered list + create button."""
+    from django.db.models import Sum
+
+    all_takes = StockTake.objects.select_related("location", "taken_by").all()
+    takes = all_takes.order_by("-taken_at")
+    location_filter = request.GET.get("location", "")
+    status_filter = request.GET.get("status", "")
+    if location_filter:
+        takes = takes.filter(location__name__iexact=location_filter)
+    if status_filter:
+        takes = takes.filter(status=status_filter)
+    locations = Location.objects.filter(is_active=True).order_by("name")
+
+    total_takes = all_takes.count()
+    complete_count = all_takes.filter(status="complete").count()
+    draft_count = all_takes.filter(status="draft").count()
+    total_items_counted = (
+        StockTakeItem.objects.filter(stock_take__status="complete")
+        .aggregate(total=Sum("counted_quantity"))["total"] or 0
+    )
+    from django.db.models import F
+    total_discrepancy = (
+        StockTakeItem.objects.filter(stock_take__status="complete")
+        .aggregate(discrepancy=Sum(F("counted_quantity") - F("expected_quantity")))["discrepancy"] or 0
+    )
+    recent_takes = all_takes.order_by("-taken_at")[:5]
+
+    return render(
+        request,
+        "inventory/stock_take_list.html",
+        {
+            "stock_takes": takes,
+            "locations": locations,
+            "location_filter": location_filter,
+            "status_filter": status_filter,
+            "total_takes": total_takes,
+            "complete_count": complete_count,
+            "draft_count": draft_count,
+            "total_items_counted": total_items_counted,
+            "total_discrepancy": total_discrepancy,
+            "recent_takes": recent_takes,
+        },
+    )
+
+
+@user_passes_test(lambda user: user.is_staff)
+def stock_take_create(request):
+    """Create a new stock take in two steps:
+    Step 1: Choose a location.
+    Step 2: Count items at that location and submit.
+    """
+    if request.method == "POST":
+        step = request.POST.get("step", "1")
+        if step == "1":
+            location_id = request.POST.get("location_id", "").strip()
+            if not location_id:
+                messages.error(request, "Please select a location.")
+                return redirect("inventory:stock_take_create")
+            try:
+                location = Location.objects.get(pk=int(location_id))
+            except (ValueError, Location.DoesNotExist):
+                messages.error(request, "Invalid location.")
+                return redirect("inventory:stock_take_create")
+            request.session["stock_take_location_id"] = location.pk
+            request.session["stock_take_location_name"] = location.name
+            return redirect("inventory:stock_take_create")
+        elif step == "2":
+            location_id = request.session.get("stock_take_location_id")
+            location_name = request.session.get("stock_take_location_name", "")
+            if not location_id:
+                messages.error(request, "No location selected. Start again.")
+                return redirect("inventory:stock_take_create")
+            location = get_object_or_404(Location, pk=location_id)
+            notes = request.POST.get("notes", "").strip()
+            item_ids = request.POST.getlist("item_ids")
+            counted_quantities = request.POST.getlist("counted_quantity")
+            if not item_ids:
+                messages.error(request, "No items to count. Go back and select items.")
+                return redirect("inventory:stock_take_create")
+            stock_take = StockTake.objects.create(
+                location=location,
+                taken_by=request.user,
+                notes=notes,
+                status="draft",
+            )
+            for index, item_id in enumerate(item_ids):
+                if not item_id.strip():
+                    continue
+                try:
+                    item = Item.objects.get(pk=int(item_id))
+                except (ValueError, Item.DoesNotExist):
+                    continue
+                counted = 1
+                if index < len(counted_quantities) and counted_quantities[index].strip():
+                    try:
+                        counted = max(0, int(counted_quantities[index]))
+                    except ValueError:
+                        counted = 0
+                StockTakeItem.objects.create(
+                    stock_take=stock_take,
+                    item=item,
+                    counted_quantity=counted,
+                    expected_quantity=item.quantity_total,
+                    notes="",
+                )
+            stock_take.status = "complete"
+            stock_take.save()
+            # Adjust item quantities to match the counted values.
+            for sti in stock_take.items.all():
+                diff = sti.counted_quantity - sti.expected_quantity
+                if diff != 0:
+                    sti.item.quantity_total = sti.counted_quantity
+                    sti.item.save()
+            del request.session["stock_take_location_id"]
+            del request.session["stock_take_location_name"]
+            messages.success(request, f"Stock take for {location_name} completed. {stock_take.item_count} item(s) counted.")
+            return redirect("inventory:stock_take_detail", pk=stock_take.pk)
+    # Step 1 or initial load.
+    # A "change_location" GET param clears any stale session so the user
+    # can pick a different location instead of being stuck on the previous one.
+    if request.GET.get("change_location"):
+        request.session.pop("stock_take_location_id", None)
+        request.session.pop("stock_take_location_name", None)
+        return redirect("inventory:stock_take_create")
+    location_id = request.session.get("stock_take_location_id")
+    location_name = request.session.get("stock_take_location_name", "")
+    locations = Location.objects.filter(is_active=True).order_by("name")
+    items = []
+    if location_id:
+        try:
+            items = Item.objects.filter(location_id=location_id, is_active=True).order_by("name")
+        except ValueError:
+            pass
+    return render(
+        request,
+        "inventory/stock_take_form.html",
+        {
+            "locations": locations,
+            "selected_location_id": location_id,
+            "selected_location_name": location_name,
+            "items": items,
+            "step": 2 if location_id else 1,
+        },
+    )
+
+
+@user_passes_test(lambda user: user.is_staff)
+def stock_take_detail(request, pk):
+    """View a stock take's details."""
+    stock_take = get_object_or_404(
+        StockTake.objects.select_related("location", "taken_by"),
+        pk=pk,
+    )
+    take_items = stock_take.items.select_related("item").all()
+    return render(
+        request,
+        "inventory/stock_take_detail.html",
+        {
+            "stock_take": stock_take,
+            "take_items": take_items,
+        },
+    )

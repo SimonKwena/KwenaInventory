@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}Stock Take | Kwena Gear Room{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="action-bar">
+        <div>
+            <h2>{% if step == 1 %}New Stock Take{% else %}Count Items{% endif %}</h2>
+            <p class="section-note">{% if step == 1 %}Select a location to begin.{% else %}Count items at {{ selected_location_name }}.{% endif %}</p>
+        </div>
+    </div>
+</div>
+
+{% if step == 1 %}
+<div class="card">
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="step" value="1">
+        <div class="form-group">
+            <label class="label" for="id_location_id">Location</label>
+            <select id="id_location_id" name="location_id" class="select-input" required>
+                <option value="">-- Select a location --</option>
+                {% for loc in locations %}
+                    <option value="{{ loc.pk }}">{{ loc.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="button-link">Continue</button>
+    </form>
+</div>
+{% else %}
+<div class="card">
+    <p><strong>Location:</strong>
+        {{ selected_location_name }}
+        <a class="button-link secondary btn-sm" href="{% url 'inventory:stock_take_create' %}?change_location=1">Change</a>
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="step" value="2">
+        {% if items %}
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>SKU</th>
+                            <th>Expected</th>
+                            <th>Counted</th>
+                            <th>Difference</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                            <tr>
+                                <td>{{ item.name }}</td>
+                                <td>{{ item.sku|default:"—" }}</td>
+                                <td>{{ item.quantity_total }}</td>
+                                <td>
+                                    <input type="number" name="counted_quantity" value="{{ item.quantity_total }}" min="0" class="text-input" style="width:80px;" data-item-id="{{ item.pk }}">
+                                    <input type="hidden" name="item_ids" value="{{ item.pk }}">
+                                </td>
+                                <td class="diff-cell">0</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="form-group" style="margin-top:16px;">
+                <label class="label" for="id_notes">Notes</label>
+                <textarea id="id_notes" name="notes" rows="2" class="text-input" style="width:100%;"></textarea>
+            </div>
+            <button type="submit" class="button-link">Submit stock take</button>
+            <a class="button-link secondary" href="{% url 'inventory:stock_take_create' %}?change_location=1">Cancel</a>
+        {% else %}
+            <p>No items found at this location.</p>
+            <a class="button-link secondary" href="{% url 'inventory:stock_take_create' %}">Choose a different location</a>
+        {% endif %}
+    </form>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    var inputs = document.querySelectorAll("input[name='counted_quantity']");
+    inputs.forEach(function (input) {
+        input.addEventListener("input", function () {
+            var row = input.closest("tr");
+            var expected = parseInt(row.querySelector("td:nth-child(3)").textContent) || 0;
+            var counted = parseInt(input.value) || 0;
+            var diff = counted - expected;
+            var diffCell = row.querySelector(".diff-cell");
+            if (diffCell) {
+                diffCell.textContent = diff > 0 ? "+" + diff : diff;
+                diffCell.style.color = diff !== 0 ? "var(--danger)" : "var(--success)";
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

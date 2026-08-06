@@ -8,11 +8,24 @@
 {% block content %}
 <div class="card auth-card" style="max-width: 520px; margin: 0 auto;">
     <h2>Guest sign in</h2>
-    <p class="section-note">Provide your details so inventory activity is attributed correctly. No password needed.</p>
+    <p class="section-note">No password needed. Fill in your details so we can attribute gear loans to you.</p>
+    <div class="card-light" style="margin-bottom: 1rem;">
+        <p class="section-note"><strong>Returning guests:</strong> use the same email address as before and we will link you to your existing guest account so your loan history and active bookings carry over.</p>
+    </div>
     <form method="post" class="form-row">
         {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit" class="button-link">Continue</button>
+        {{ form.non_field_errors }}
+        {% for field in form %}
+            <div>
+                <label class="label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="required-star">*</span>{% endif %}</label>
+                {{ field }}
+                {% if field.help_text %}<p class="section-note">{{ field.help_text }}</p>{% endif %}
+                {{ field.errors }}
+            </div>
+        {% endfor %}
+        <div class="actions">
+            <button type="submit" class="button-link">Continue</button>
+        </div>
     </form>
 </div>
 {% endblock %}

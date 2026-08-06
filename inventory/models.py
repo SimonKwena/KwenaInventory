@@ -713,6 +713,82 @@ class Maintenance(models.Model):
         return self.completed_at is None
 
 
+class StockTake(models.Model):
+    """A stock take event: a physical count of items at a location.
+
+    ``status`` tracks the lifecycle:
+    - ``draft`` — being prepared, items are being scanned/selected.
+    - ``complete`` — the count is finalised and quantities have been
+      adjusted to match the counted values.
+    """
+
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("complete", "Complete"),
+    ]
+
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="stock_takes")
+    taken_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="stock_takes")
+    taken_at = models.DateTimeField(default=timezone.now)
+    notes = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
+    created_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-taken_at"]
+
+    def __str__(self):
+        return f"Stock take {self.pk} — {self.location.name} ({self.get_status_display()})"
+
+    @property
+    def is_draft(self):
+        return self.status == "draft"
+
+    @property
+    def is_complete(self):
+        return self.status == "complete"
+
+    @property
+    def item_count(self):
+        return self.items.count()
+
+    def save(self, *args, **kwargs):
+        if self.status == "complete" and self.completed_at is None:
+            self.completed_at = timezone.now()
+        super().save(*args, **kwargs)
+
+
+class StockTakeItem(models.Model):
+    """One line of a :class:`StockTake` — the counted quantity for a
+    single item at the time of the stock take."""
+
+    stock_take = models.ForeignKey(StockTake, on_delete=models.CASCADE, related_name="items")
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="stock_take_items")
+    counted_quantity = models.PositiveIntegerField(default=0)
+    expected_quantity = models.PositiveIntegerField(default=0)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["item__name"]
+        unique_together = [("stock_take", "item")]
+
+    def __str__(self):
+        return f"{self.item.name}: counted {self.counted_quantity} (expected {self.expected_quantity})"
+
+    @property
+    def difference(self):
+        return self.counted_quantity - self.expected_quantity
+
+    def save(self, *args, **kwargs):
+        # Keep expected_quantity in sync with the item's total at the time
+        # of counting so discrepancies are meaningful even if the item
+        # changes later.
+        if self.item_id and not self.expected_quantity:
+            self.expected_quantity = self.item.quantity_total
+        super().save(*args, **kwargs)
+
+
 class Notification(models.Model):
     """A personal notification for a single user, e.g. when an admin updates the
     status of a reservation or request. Distinct from Announcement, which is
