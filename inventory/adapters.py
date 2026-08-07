@@ -14,7 +14,7 @@ class KwenaSocialAccountAdapter(DefaultSocialAccountAdapter):
                     "Only @kwenamusic.co.za Google accounts are allowed to sign in.",
                 )
                 raise ImmediateHttpResponse(
-                    HttpResponseRedirect("/inventory/accounts/login/")
+                    HttpResponseRedirect("/inventory/landing/")
                 )
 
     def is_open_for_signup(self, request, sociallogin):
