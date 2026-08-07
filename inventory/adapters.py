@@ -16,3 +16,17 @@ class KwenaSocialAccountAdapter(DefaultSocialAccountAdapter):
                 raise ImmediateHttpResponse(
                     HttpResponseRedirect("/inventory/accounts/login/")
                 )
+
+    def is_open_for_signup(self, request, sociallogin):
+        if getattr(sociallogin, "account", None) and sociallogin.account.provider == "google":
+            email = (sociallogin.account.extra_data.get("email") or "").lower()
+            if not email.endswith("@kwenamusic.co.za"):
+                return False
+        return super().is_open_for_signup(request, sociallogin)
+
+    def is_auto_signup_allowed(self, request, sociallogin):
+        if getattr(sociallogin, "account", None) and sociallogin.account.provider == "google":
+            email = (sociallogin.account.extra_data.get("email") or "").lower()
+            if not email.endswith("@kwenamusic.co.za"):
+                return False
+        return super().is_auto_signup_allowed(request, sociallogin)
