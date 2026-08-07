@@ -1896,7 +1896,6 @@ function gearroomInit() {
     });
 
     /* ---------- Quick action keyboard shortcuts ---------- */
-    const homeForm = document.querySelector('#home-action-form');
     if (homeForm) {
         homeForm.addEventListener('keydown', function (event) {
             if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
