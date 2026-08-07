@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Login Cancelled" %} | Kwena Gear Room{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<div class="card auth-card" style="max-width: 460px; margin: 0 auto;">
+    <h1>{% trans "Login Cancelled" %}</h1>
+    <p>{% trans "You decided to cancel logging in to our site using one of your existing accounts. If this was a mistake, please proceed to sign in." %}</p>
+    <a class="button-link" href="{% url 'account_login' %}">{% trans "Sign In" %}</a>
+</div>
+{% endblock %}
