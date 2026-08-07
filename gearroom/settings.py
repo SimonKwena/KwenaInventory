@@ -240,6 +240,7 @@ LOGOUT_REDIRECT_URL = '/inventory/'
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'none'
+SOCIALACCOUNT_LOGIN_ON_GET = True
 SOCIALACCOUNT_ADAPTER = "inventory.adapters.KwenaSocialAccountAdapter"
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
