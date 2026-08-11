@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
@@ -30,6 +31,7 @@ def account_notifications(request):
             "user_role_label": "Student",
             "is_staff_role": False,
             "cart_counts": _cart_counts(request),
+            "webpush_vapid_public_key": "",
         }
     now = timezone.now()
     announcement_count = (
@@ -56,4 +58,5 @@ def account_notifications(request):
         "is_teacher": role_of(user) == ROLE_TEACHER,
         "is_staff_role": is_staff_role(user),
         "cart_counts": _cart_counts(request),
+        "webpush_vapid_public_key": getattr(settings, "WEBPUSH_VAPID_PUBLIC_KEY", ""),
     }

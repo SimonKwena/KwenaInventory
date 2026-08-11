@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from datetime import timedelta
@@ -11,6 +12,7 @@ from django.core.files.base import ContentFile
 from django.core.mail import send_mail
 from django.db import models
 from django.utils import timezone
+from pywebpush import webpush
 
 logger = logging.getLogger(__name__)
 
@@ -280,6 +282,10 @@ class UserProfile(models.Model):
             ("guest", "Guest"),
         ],
         default="student",
+    )
+    has_seen_onboarding = models.BooleanField(
+        default=False,
+        help_text="Whether the user has dismissed the first-login onboarding popup.",
     )
     created_at = models.DateTimeField(default=timezone.now)
 
@@ -802,6 +808,7 @@ class Notification(models.Model):
         ("reservation", "Reservation"),
         ("request", "Request"),
         ("general", "General"),
+        ("reminder", "Reminder"),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
@@ -849,6 +856,31 @@ class Notification(models.Model):
         self.email_sent = True
         self.save(update_fields=["email_sent"])
         return True
+
+
+class Reminder(models.Model):
+    """Record that a reminder was sent for a transaction so we don't spam."""
+
+    REMINDER_TYPES = [
+        ("overdue", "Overdue"),
+        ("due_soon", "Due soon"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reminders")
+    transaction = models.ForeignKey(
+        Transaction, on_delete=models.CASCADE, related_name="reminders"
+    )
+    reminder_type = models.CharField(max_length=20, choices=REMINDER_TYPES)
+    sent_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-sent_at"]
+        indexes = [
+            models.Index(fields=["user", "reminder_type", "sent_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.reminder_type} reminder for {self.user.username} - {self.transaction}"
 
 
 # How each (transaction_type, kind) maps to a notification. Book-aheads are
@@ -939,10 +971,9 @@ def notify_transaction_change(txn, kind, *, actor_name=""):
         title=title,
         message=message,
     )
-    # Best-effort email; no-ops (and never crashes) when no email backend is
-    # configured or the user has no address.
     if getattr(settings, "EMAIL_BACKEND", None):
         notification.send_email()
+    send_webpush_notification(target_user, title, message)
     return notification
 
 
@@ -989,6 +1020,7 @@ def notify_request_received(request_obj):
         message=message,
     )
     notification.send_email()
+    send_webpush_notification(request_obj.user, title, message)
     return notification
 
 
@@ -1004,3 +1036,63 @@ def cleanup_old_notifications(days=180, keep_unread=True):
         qs = qs.filter(is_read=True)
     deleted, _ = qs.delete()
     return deleted or 0
+
+
+class WebPushDevice(models.Model):
+    """A browser push subscription for a user.
+
+    Each row stores the endpoint URL and cryptographic material needed to send
+    a push message to that specific browser instance. A user may have multiple
+    devices (different browsers / profiles).
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="webpush_devices")
+    endpoint = models.URLField(max_length=500, unique=True)
+    auth = models.CharField(max_length=256)
+    p256dh = models.CharField(max_length=256)
+    user_agent = models.CharField(max_length=512, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    last_used = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "last_used"]),
+        ]
+
+    def __str__(self):
+        return f"Push device for {self.user.username}"
+
+
+def send_webpush_notification(user, title, message, url=""):
+    """Send a push notification to all active devices for ``user``.
+
+    Returns the number of devices the push was successfully delivered to.
+    Failures are logged but never raised so notification delivery never
+    interrupts the calling workflow.
+    """
+    if not getattr(settings, "WEBPUSH_VAPID_PRIVATE_KEY", ""):
+        return 0
+    devices = WebPushDevice.objects.filter(user=user)
+    if not devices.exists():
+        return 0
+    payload = json.dumps({"title": title, "body": message, "url": url or "/"})
+    sent = 0
+    for device in devices:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": device.endpoint,
+                    "keys": {"auth": device.auth, "p256dh": device.p256dh},
+                },
+                data=payload,
+                vapid_private_key=getattr(settings, "WEBPUSH_VAPID_PRIVATE_KEY", ""),
+                vapid_claims={"sub": f"mailto:{getattr(settings, 'WEBPUSH_VAPID_ADMIN_EMAIL', '')}"},
+                timeout=10,
+            )
+            device.last_used = timezone.now()
+            device.save(update_fields=["last_used"])
+            sent += 1
+        except Exception:
+            logger.exception("Web push failed for user %s device %s", user.pk, device.endpoint)
+    return sent

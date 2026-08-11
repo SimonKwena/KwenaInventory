@@ -1,123 +1,125 @@
 {% extends 'base.html' %}
 
-{% block title %}Browse gear | Kwena Gear Room{% endblock %}
+{% block title %}Browse items | Kwena Gear Room{% endblock %}
 
 {% block content %}
-    <div class="card">
-        <div class="catalog-toolbar">
-            <div>
-                <h2>Browse gear</h2>
-                <p class="section-note">Search, filter, and add gear to your cart.</p>
-            </div>
-            <div class="catalog-toolbar-actions">
-                <button type="button" id="catalog-toggle-all" class="button-link secondary btn-sm">Expand all</button>
-            </div>
+    {% if messages %}
+    <div class="message-bar" id="catalog-messages" role="status" aria-live="polite">
+        {% for message in messages %}
+        <div class="message {{ message.tags }}">
+            <span class="message-text">{{ message }}</span>
         </div>
-        <div class="catalog-filters" data-region="catalog-filters">
-            <div class="catalog-filter-row">
-                <div class="catalog-filter-search">
-                    <input type="search" id="catalog-search" class="text-input" placeholder="Search by name, SKU, type..." autocomplete="off">
-                </div>
-                <div class="catalog-filter-selects">
-                    <label class="field-inline">
-                        <span>Location</span>
-                        <select id="catalog-location-filter" class="select-input">
-                            <option value="">All locations</option>
-                            {% for loc in locations %}
-                                <option value="{{ loc.name }}">{{ loc.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </label>
-                    <label class="field-inline">
-                        <span>Availability</span>
-                        <select id="catalog-availability-filter" class="select-input">
-                            <option value="">Any</option>
-                            <option value="available">In stock</option>
-                            <option value="out">Out of stock</option>
-                        </select>
-                    </label>
-                    <button type="button" class="button-link secondary btn-sm" id="catalog-filter-reset">Reset</button>
-                </div>
-            </div>
-            <p class="catalog-filter-status" id="catalog-filter-status" aria-live="polite"></p>
-        </div>
-    </div>
-
-    <div data-region="catalog-sections">
-        {% regroup items by group_label as category_list %}
-        {% for category_group in category_list %}
-            <section class="catalog-section">
-                <div class="catalog-section-head catalog-head-interactive">
-                    <button type="button" class="catalog-section-toggle group-toggle" data-target="category-group-{{ forloop.counter }}" aria-expanded="false" aria-controls="category-group-{{ forloop.counter }}">
-                        <span class="catalog-toggle-label">
-                            <span class="catalog-chevron" aria-hidden="true"></span>
-                            <h3>{{ category_group.grouper }}<span class="catalog-count">{{ category_group.list|length }}</span></h3>
-                        </span>
-                    </button>
-                </div>
-                <div class="group-body collapsed" id="category-group-{{ forloop.counter }}">
-                    <div class="table-wrapper catalog-table-wrapper">
-                        <table class="catalog-table" data-group="{{ forloop.counter }}">
-                            <thead>
-                                <tr>
-                                    <th>Item</th>
-                                    <th>SKU</th>
-                                    <th>Location</th>
-                                    <th>Available</th>
-                                    <th class="col-qty">Qty</th>
-                                    <th class="col-action">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in category_group.list %}
-                                    <tr class="catalog-item-row"
-                                        data-location="{{ item.location.name }}"
-                                        data-available="{{ item.quantity_available }}"
-                                        data-search="{{ item.name }} {{ item.sku }} {{ item.category }} {{ item.subcategory }}">
-                                        <td data-label="Item">
-                                            <a class="text-link" href="{% url 'inventory:item_detail' item.pk %}">{{ item.name }}</a>
-                                            {% if item.subcategory %}<span class="section-note catalog-item-sub"> &middot; {{ item.subcategory }}</span>{% endif %}
-                                        </td>
-                                        <td data-label="SKU" class="text-muted">{{ item.sku|default:"—" }}</td>
-                                        <td data-label="Location">{{ item.location.name }}</td>
-                                        <td data-label="Available">
-                                            {% if item.quantity_available > 0 %}
-                                                <span class="pill pill-success">{{ item.quantity_available }}</span>
-                                            {% else %}
-                                                <span class="pill pill-danger">Out</span>
-                                            {% endif %}
-                                        </td>
-                                        <td data-label="Qty" class="col-qty">
-                                            <input type="number" class="text-input catalog-qty" value="1" min="1" max="{{ item.quantity_available|default:1 }}" style="width:64px;padding:8px 10px;">
-                                        </td>
-                                        <td data-label="Action" class="col-action">
-                                            <form method="post" action="{% url 'inventory:cart_add' %}" class="cart-add-form catalog-add-form">
-                                                {% csrf_token %}
-                                                <input type="hidden" name="item_id" value="{{ item.pk }}">
-                                                <div class="catalog-action-row">
-                                                    <select name="action" class="select-input catalog-action-select">
-                                                        <option value="book_ahead">Book ahead</option>
-                                                        {% if can_check_out %}
-                                                        <option value="check_out">Check out</option>
-                                                        {% endif %}
-                                                    </select>
-                                                    <input type="hidden" name="quantity" value="1" class="catalog-qty-hidden">
-                                                    <button type="submit" class="button-link btn-sm">Add</button>
-                                                </div>
-                                            </form>
-                                            <a class="text-link catalog-details-link" href="{% url 'inventory:item_detail' item.pk %}">Details &rarr;</a>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-        {% empty %}
-            <div class="card">
-                <p class="section-note">No active items yet. Add some from the admin panel.</p>
-            </div>
         {% endfor %}
+    </div>
+    {% endif %}
+    <div class="catalog-layout">
+        <aside class="catalog-sidebar" id="catalog-sidebar">
+            <div class="catalog-sidebar-head">
+                <h3>Filters</h3>
+                <button type="button" class="button-link ghost btn-sm" id="catalog-filter-reset">Reset</button>
+            </div>
+            <div class="catalog-sidebar-body">
+                <form method="get" action="{% url 'inventory:catalog' %}" class="catalog-sidebar-search">
+                    <input type="search" name="q" class="text-input" placeholder="Search items..." value="{{ search_query|default:'' }}" autocomplete="off">
+                </form>
+
+                {% if categories %}
+                    <div class="catalog-filter-group">
+                        <h4>Category</h4>
+                        <div class="catalog-category-list">
+                            {% for cat in categories %}
+                            <label class="catalog-category-item">
+                                <input type="checkbox" value="{{ cat }}" data-filter="category">
+                                <span>{{ cat }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <div class="catalog-filter-group">
+                    <h4>Location</h4>
+                    <select id="catalog-location-filter" class="select-input">
+                        <option value="">All locations</option>
+                        {% for loc in locations %}
+                            <option value="{{ loc.name }}">{{ loc.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="catalog-filter-group">
+                    <h4>Availability</h4>
+                    <select id="catalog-availability-filter" class="select-input">
+                        <option value="">Any</option>
+                        <option value="available">In stock</option>
+                        <option value="out">Out of stock</option>
+                    </select>
+                </div>
+            </div>
+        </aside>
+
+        <div class="catalog-main">
+            <div class="catalog-main-head">
+                <div>
+                    <h2>Browse items</h2>
+                    <p class="catalog-results-count" id="catalog-filter-status" aria-live="polite"></p>
+                </div>
+                {% if cart_counts.total %}
+                <a class="catalog-cart-link" href="{% url 'inventory:cart' %}">
+                    <svg class="catalog-cart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.17 14.75l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1.06 1.06 0 0 0 18 4H6.54l-.94-2H1v2h2l3.6 7.59-1.35 2.44C4.52 15.37 5.48 17 7 17h12v-2H7.42c-.14 0-.25-.11-.25-.25z"/></svg>
+                    <span class="nav-badge catalog-cart-badge">{{ cart_counts.total }}</span>
+                </a>
+                {% endif %}
+            </div>
+            <div class="product-grid" data-region="catalog-sections">
+                {% for item in items %}
+                    <article class="product-card" data-location="{{ item.location.name }}" data-available="{{ item.quantity_available }}" data-category="{{ item.group_label }}" data-search="{{ item.name }} {{ item.category }} {{ item.subcategory }} {{ item.type_label }}" data-item-id="{{ item.pk }}">
+                        <div class="product-card-img">
+                            {% if item.image %}
+                                <img src="{{ item.image.url }}" alt="{{ item.name }}" loading="lazy">
+                            {% else %}
+                                <div class="product-card-placeholder">
+                                    <span>{{ item.name|first|upper }}</span>
+                                </div>
+                            {% endif %}
+                            {% if item.quantity_available > 0 %}
+                                <span class="pill pill-success product-card-badge">{{ item.quantity_available }} in stock</span>
+                            {% else %}
+                                <span class="pill pill-danger product-card-badge">Out</span>
+                            {% endif %}
+                        </div>
+                        <div class="product-card-body">
+                            <h3>{{ item.name }}</h3>
+                            {% if item.group_label %}
+                            <span class="product-card-category">{{ item.group_label }}</span>
+                            {% endif %}
+                            <div class="product-card-footer">
+                                <span class="pill pill-neutral">{{ item.location.name }}</span>
+                                <form method="post" action="{% url 'inventory:cart_add' %}" class="cart-add-form catalog-add-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="item_id" value="{{ item.pk }}">
+                                    <div class="product-card-actions">
+                                        <input type="number" class="text-input catalog-qty" value="1" min="1" max="{{ item.quantity_available|default:1 }}">
+                                        <select name="action" class="select-input catalog-action-select">
+                                            <option value="book_ahead">Book ahead</option>
+                                            {% if can_check_out %}
+                                            <option value="check_out">Check out</option>
+                                            {% endif %}
+                                        </select>
+                                        <input type="hidden" name="quantity" value="1" class="catalog-qty-hidden">
+                                        <button type="submit" class="button-link btn-sm">Add</button>
+                                        <a class="button-link ghost btn-sm catalog-details-link" href="{% url 'inventory:item_detail' item.pk %}">Details &rarr;</a>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </article>
+                {% empty %}
+                    <div class="catalog-empty">
+                        <p class="section-note">No active items match your filters. Try adjusting your search or filters.</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
     </div>
 {% endblock %}

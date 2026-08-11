@@ -11,6 +11,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/site.css' %}?v=42">
     <script defer src="{% static 'js/vendor/jsQR.min.js' %}?v=1"></script>
+    {% if request.user.is_authenticated %}
+    <script>
+        window.__WEBPUSH_VAPID_PUBLIC_KEY__ = "{{ webpush_vapid_public_key|default:'' }}";
+    </script>
+    {% endif %}
     <script defer src="{% static 'js/site.js' %}?v=44"></script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -136,6 +141,14 @@
             {% endfor %}
         </div>
         {% endif %}
+        {% if request.user.is_authenticated and webpush_vapid_public_key %}
+        <div class="message-bar" id="push-permission-bar" role="status" aria-live="polite" hidden>
+            <span class="message-icon" aria-hidden="true">&#x1F4F2;</span>
+            <span class="message-text">Enable browser notifications to get alerts about your gear?</span>
+            <button type="button" class="button-link" id="push-permission-enable">Enable</button>
+            <button type="button" class="message-close" id="push-permission-dismiss" aria-label="Dismiss">&times;</button>
+        </div>
+        {% endif %}
         <main id="main">
             {% block content %}{% endblock %}
         </main>
@@ -143,6 +156,10 @@
             Kwena Music &middot; Gear, in and out &middot; Made by Simon
         </footer>
     </div>
+    <button type="button" class="back-to-top" id="back-to-top" aria-hidden="true" tabindex="-1">
+        <span aria-hidden="true">&uarr;</span>
+    </button>
+    {% include "inventory/partials/onboarding_modal.html" %}
     {% block extra_js %}{% endblock %}
 </body>
 </html>

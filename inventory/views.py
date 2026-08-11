@@ -1,3 +1,4 @@
+import json
 import uuid
 
 from django.contrib import messages
@@ -39,6 +40,7 @@ from .models import (
     StockTake,
     StockTakeItem,
     Transaction,
+    WebPushDevice,
     display_name,
     notify_transaction_change,
 )
@@ -65,6 +67,7 @@ from .permissions import (
     can_book_ahead,
     can_check_in,
     can_check_out,
+    ensure_profile,
     is_admin_or_above,
     is_staff_role,
     location_is_visible,
@@ -122,8 +125,8 @@ def _cart_items(request):
                 {
                     "item_id": item.pk,
                     "name": item.name,
-                    "sku": item.sku,
                     "location": item.location.name if item.location else "",
+                    "location_id": item.location.pk if item.location else "",
                     "quantity": max(1, int(entry.get("quantity") or 1)),
                     "quantity_available": item.quantity_available,
                 }
@@ -307,14 +310,14 @@ def cart_add(request):
         return JsonResponse({"ok": True, "counts": _cart_counts(request)})
 
     messages.success(request, f"Added to your {action.replace('_', ' ')} cart.")
-    return redirect("inventory:catalog")
+    return redirect("inventory:cart")
 
 
 @require_POST
 @csrf_exempt
 def cart_remove(request):
     if not request.user.is_authenticated:
-        return redirect("inventory:home")
+        return redirect("inventory:cart")
     action = request.POST.get("action", "")
     try:
         item_id = int(request.POST.get("item_id"))
@@ -325,15 +328,16 @@ def cart_remove(request):
         raw[action] = [e for e in raw[action] if e.get("item_id") != item_id]
         request.session[CART_SESSION_KEY] = raw
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        return JsonResponse({"ok": True, "counts": _cart_counts(request)})
-    return redirect("inventory:home")
+        return JsonResponse({"ok": True, "counts": _cart_counts(request), "message": f"Added to your {action.replace('_', ' ')} cart."})
+    messages.success(request, f"Added to your {action.replace('_', ' ')} cart.")
+    return redirect("inventory:cart")
 
 
 @require_POST
 @csrf_exempt
 def cart_clear(request):
     if not request.user.is_authenticated:
-        return redirect("inventory:home")
+        return redirect("inventory:cart")
     action = request.POST.get("action") or ""
     raw = request.session.get(CART_SESSION_KEY, {})
     if action:
@@ -343,7 +347,7 @@ def cart_clear(request):
     request.session[CART_SESSION_KEY] = raw
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return JsonResponse({"ok": True, "counts": _cart_counts(request)})
-    return redirect("inventory:home")
+    return redirect("inventory:catalog")
 
 
 def home(request):
@@ -402,8 +406,6 @@ def home(request):
             "total_out": total_out,
             "borrowed_items": borrowed_items,
             "announcements": announcements,
-            "cart_items": _cart_items(request),
-            "cart_counts": _cart_counts(request),
             "pending_requests": _home_pending_requests(request.user),
             "reservations": _home_reservations(request.user),
             "active_loans": active_loans,
@@ -465,8 +467,6 @@ def teacher_home(request):
             "total_out": total_out,
             "borrowed_items": borrowed_items,
             "announcements": announcements,
-            "cart_items": _cart_items(request),
-            "cart_counts": _cart_counts(request),
             "pending_requests": _home_pending_requests(request.user),
             "reservations": _home_reservations(request.user),
             "active_loans": active_loans,
@@ -515,8 +515,6 @@ def staff_home(request):
             "can_check_out": can_check_out(request.user),
             "can_check_in": can_check_in(request.user, has_active_gear),
             "active_loans": active_loans,
-            "cart_items": _cart_items(request),
-            "cart_counts": _cart_counts(request),
         },
     )
 
@@ -524,6 +522,7 @@ def staff_home(request):
 @login_required
 @ensure_csrf_cookie
 def catalog(request):
+    q = (request.GET.get("q") or "").strip()
     item_qs = (
         Item.objects.filter(is_active=True)
         .select_related("location", "status")
@@ -531,20 +530,202 @@ def catalog(request):
     )
     if not request.user.is_staff:
         item_qs = item_qs.filter(location__in=visible_locations(request.user))
+    if q:
+        item_qs = item_qs.filter(
+            Q(name__icontains=q)
+            | Q(sku__icontains=q)
+            | Q(category__icontains=q)
+            | Q(subcategory__icontains=q)
+            | Q(description__icontains=q)
+        )
     items = list(item_qs)
     for item in items:
         desc = (item.description or "").strip()
         item.type_label = desc if not desc.startswith("Imported from") else ""
         item.group_label = (item.category or "").strip() or (item.type_label or "Items")
-    locations = Location.objects.filter(is_active=True).order_by("name")
+    categories = sorted({item.group_label for item in items if item.group_label})
+    locations = visible_locations(request.user).order_by("name")
     return render(
         request,
         "inventory/catalog.html",
         {
             "items": items,
             "locations": locations,
+            "categories": categories,
             "can_check_out": can_check_out(request.user),
             "cart_counts": _cart_counts(request),
+            "search_query": q,
+        },
+    )
+
+
+@login_required
+def catalog_stock(request):
+    """Lightweight JSON endpoint returning current stock for specific items.
+
+    Used by the catalog page to keep the on-screen quantities fresh without
+    re-rendering the entire product grid."""
+    ids = request.GET.get("ids", "")
+    id_list = [i.strip() for i in ids.split(",") if i.strip().isdigit()]
+    items = Item.objects.filter(pk__in=id_list).only("pk", "quantity_total", "quantity_out", "quantity_maintenance")
+    data = {}
+    for item in items:
+        data[str(item.pk)] = {
+            "available": item.quantity_available,
+            "total": item.quantity_total,
+            "out": item.quantity_out,
+            "maintenance": item.quantity_maintenance,
+        }
+    return JsonResponse({"items": data})
+
+
+@login_required
+def cart(request):
+    """Show the cart page (GET) or submit all cart items (POST)."""
+    raw = request.session.get(CART_SESSION_KEY, {})
+    actions = [("book_ahead", "Book ahead"), ("check_out", "Check out")]
+    cart_items = []
+    for action, label in actions:
+        entries = raw.get(action, [])
+        if not entries:
+            continue
+        resolved = []
+        for entry in entries:
+            item = Item.objects.filter(pk=entry.get("item_id"), is_active=True).first()
+            if not item:
+                continue
+            resolved.append(
+                {
+                    "item_id": item.pk,
+                    "name": item.name,
+                    "location": item.location.name if item.location else "",
+                    "location_id": item.location.pk if item.location else "",
+                    "quantity": max(1, int(entry.get("quantity") or 1)),
+                    "quantity_available": item.quantity_available,
+                }
+            )
+        if resolved:
+            cart_items.append({"action": action, "label": label, "entries": resolved})
+
+    if request.method == "POST":
+        if not cart_items:
+            messages.info(request, "Your cart is empty.")
+            return redirect("inventory:catalog")
+
+        # Read shared fields from the cart form.
+        taken_at = request.POST.get("taken_at") or None
+        expected_return = request.POST.get("expected_return") or None
+        notes = (request.POST.get("notes") or "").strip()
+
+        # Validate required fields.
+        errors = []
+        if not notes:
+            errors.append("Purpose is required.")
+        has_book_ahead = any(group["action"] == "book_ahead" for group in cart_items)
+        has_check_out = any(group["action"] == "check_out" for group in cart_items)
+        if has_book_ahead and not taken_at:
+            errors.append("Expected Checkout is required for book-ahead items.")
+        if has_book_ahead and not expected_return:
+            errors.append("Expected return is required for book-ahead items.")
+        if has_check_out and not expected_return:
+            errors.append("Expected return is required for check-out items.")
+        if errors:
+            for err in errors:
+                messages.error(request, err)
+            return redirect("inventory:cart")
+
+        # Build item entries from the cart, reading the per-item action/qty.
+        item_entries = []
+        for group in cart_items:
+            for entry in group["entries"]:
+                pk = entry["item_id"]
+                action_val = request.POST.get("action_" + str(pk), group["action"])
+                qty_val = request.POST.get("qty_" + str(pk))
+                try:
+                    qty = max(1, int(qty_val)) if qty_val else entry["quantity"]
+                except (TypeError, ValueError):
+                    qty = entry["quantity"]
+                item_entries.append({
+                    "item": Item.objects.get(pk=pk),
+                    "quantity": qty,
+                    "location_id": entry.get("location_id"),
+                    "action": action_val,
+                })
+
+        # Group by action type so each request has a single transaction_type.
+        by_action = {}
+        for entry in item_entries:
+            by_action.setdefault(entry["action"], []).append(entry)
+
+        created_any = False
+        for action_type, entries in by_action.items():
+            if action_type == "check_out" and not can_check_out(request.user):
+                messages.error(request, "You must sign in with a kwenamusic.co.za account to check gear out.")
+                return redirect("inventory:cart")
+
+            request_item_entries = []
+            for entry in entries:
+                row_location = None
+                loc_id = request.POST.get("location_id_" + str(entry["item"].pk))
+                if loc_id:
+                    row_location = Location.objects.filter(pk=loc_id).first()
+                if row_location is None:
+                    row_location = entry["item"].location
+                request_item_entries.append({
+                    "item": entry["item"],
+                    "quantity": entry["quantity"],
+                    "location": row_location,
+                    "condition": None,
+                })
+
+            request_obj, error = create_request(
+                request.user,
+                action_type,
+                request_item_entries,
+                notes=notes,
+                expected_return=expected_return,
+                taken_at=taken_at,
+            )
+            if error:
+                messages.error(request, error)
+                return redirect("inventory:cart")
+
+            if is_staff_role(request.user):
+                ok, error = apply_request(request_obj, decided_by=request.user)
+                if not ok:
+                    messages.error(request, error)
+                    return redirect("inventory:cart")
+                label = action_type.replace("_", " ").title()
+                item_count = request_obj.items.count()
+                messages.success(
+                    request,
+                    f"Auto-approved {label} for {item_count} item(s). Stock has moved.",
+                )
+            else:
+                label = action_type.replace("_", " ").title()
+                item_count = request_obj.items.count()
+                messages.success(
+                    request,
+                    f"{label} request submitted for {item_count} item(s). An admin must approve it before any stock moves.",
+                )
+            created_any = True
+
+        if created_any:
+            request.session[CART_SESSION_KEY] = {}
+            messages.info(request, "Your cart has been submitted.")
+            return redirect("inventory:catalog")
+
+    locations = visible_locations(request.user).order_by("name")
+    conditions = ConditionOption.objects.filter(is_active=True).order_by("name")
+    return render(
+        request,
+        "inventory/cart.html",
+        {
+            "cart_items": cart_items,
+            "locations": locations,
+            "conditions": conditions,
+            "can_book_ahead": can_book_ahead(request.user),
+            "can_check_out": can_check_out(request.user),
         },
     )
 
@@ -614,6 +795,25 @@ def local_logout(request):
     auth_logout(request)
     messages.info(request, "You have signed out.")
     return redirect("inventory:landing")
+
+
+@require_POST
+@login_required
+def mark_onboarding_seen(request):
+    """Dismiss the first-login onboarding popup.
+
+    ``permanent=1`` writes ``has_seen_onboarding`` to the profile so the modal
+    never returns on future logins; otherwise only the session flag is cleared
+    and the popup resurfaces on the next login (a "skip for now" behaviour)."""
+    permanent = request.POST.get("permanent") == "1"
+    profile = ensure_profile(request.user)
+    if permanent:
+        profile.has_seen_onboarding = True
+        profile.save(update_fields=["has_seen_onboarding"])
+    request.session.pop("show_onboarding", None)
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse({"ok": True, "permanent": permanent})
+    return redirect("inventory:home")
 
 
 @login_required
@@ -2230,14 +2430,20 @@ def live_region(request):
     panels are never disturbed by a pushed change. The fragments are produced
     by re-running the page's own view with identical context, so there is a
     single source of truth (no duplicated queryset logic)."""
-    from django.http import HttpResponse
+    from django.http import HttpResponse, QueryDict
     from django.urls import Resolver404, resolve
 
     from . import live
 
-    path = (request.GET.get("path") or request.path).split("?")[0]
+    raw_path = request.GET.get("path") or request.path
+    query_string = ""
+    if isinstance(raw_path, str) and "?" in raw_path:
+        path_only, query_string = raw_path.split("?", 1)
+    else:
+        path_only = raw_path
+
     try:
-        match = resolve(path)
+        match = resolve(path_only)
     except Resolver404:
         return JsonResponse({"version": live.peek_version(), "regions": {}}, status=404)
 
@@ -2246,6 +2452,19 @@ def live_region(request):
     view_func = match.func
     new_request = request
     new_request.resolver_match = match
+
+    # Merge any query-string params the client sent (e.g. catalog filters) so
+    # the view renders the same filtered data the user is currently seeing.
+    if query_string:
+        try:
+            qd = QueryDict(query_string)
+            merged = request.GET.copy()
+            for key in qd:
+                merged.setlist(key, qd.getlist(key))
+            new_request.GET = merged
+        except Exception:
+            pass
+
     try:
         response = view_func(new_request, *match.args, **match.kwargs)
     except Exception:
@@ -2514,3 +2733,122 @@ def stock_take_detail(request, pk):
             "take_items": take_items,
         },
     )
+
+
+@login_required
+@require_POST
+def webpush_subscribe(request):
+    """Save or update a browser push subscription for the current user."""
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "error": "Invalid JSON."}, status=400)
+
+    endpoint = (payload.get("endpoint") or "").strip()
+    auth = (payload.get("keys", {}).get("auth") or "").strip()
+    p256dh = (payload.get("keys", {}).get("p256dh") or "").strip()
+    user_agent = (payload.get("userAgent") or request.META.get("HTTP_USER_AGENT", "")).strip()[:512]
+
+    if not endpoint or not auth or not p256dh:
+        return JsonResponse({"ok": False, "error": "Missing subscription fields."}, status=400)
+
+    device, created = WebPushDevice.objects.update_or_create(
+        endpoint=endpoint,
+        defaults={
+            "user": request.user,
+            "auth": auth,
+            "p256dh": p256dh,
+            "user_agent": user_agent,
+            "last_used": timezone.now(),
+        },
+    )
+    status = "created" if created else "updated"
+    return JsonResponse({"ok": True, "status": status})
+
+
+@login_required
+@require_POST
+def webpush_unsubscribe(request):
+    """Remove a browser push subscription for the current user."""
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "error": "Invalid JSON."}, status=400)
+
+    endpoint = (payload.get("endpoint") or "").strip()
+    if not endpoint:
+        return JsonResponse({"ok": False, "error": "Missing endpoint."}, status=400)
+
+    qs = WebPushDevice.objects.filter(endpoint=endpoint, user=request.user)
+    deleted, _ = qs.delete()
+    return JsonResponse({"ok": True, "deleted": deleted})
+
+
+@login_required
+def webpush_devices(request):
+    """List the current user's push devices (JSON)."""
+    devices = WebPushDevice.objects.filter(user=request.user).order_by("-created_at")
+    data = [
+        {
+            "id": d.pk,
+            "endpoint": d.endpoint,
+            "user_agent": d.user_agent,
+            "created_at": d.created_at.isoformat(),
+            "last_used": d.last_used.isoformat(),
+        }
+        for d in devices
+    ]
+    return JsonResponse({"ok": True, "devices": data})
+
+
+@login_required
+@require_POST
+def webpush_send_test(request):
+    """Send a test push notification to all of the current user's devices."""
+    from pywebpush import webpush, WebPushException
+    from django.conf import settings
+
+    vapid_private_key = getattr(settings, "WEBPUSH_VAPID_PRIVATE_KEY", "")
+    vapid_admin_email = getattr(settings, "WEBPUSH_VAPID_ADMIN_EMAIL", "")
+    if not vapid_private_key:
+        return JsonResponse({"ok": False, "error": "VAPID private key is not configured."}, status=500)
+
+    devices = WebPushDevice.objects.filter(user=request.user)
+    results = []
+    for device in devices:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": device.endpoint,
+                    "keys": {"auth": device.auth, "p256dh": device.p256dh},
+                },
+                data=json.dumps({"title": "Kwena Storage", "body": "Test notification from the inventory system."}),
+                vapid_private_key=vapid_private_key,
+                vapid_claims={"sub": f"mailto:{vapid_admin_email}"},
+            )
+            device.last_used = timezone.now()
+            device.save(update_fields=["last_used"])
+            results.append({"endpoint": device.endpoint, "status": "sent"})
+        except WebPushException as exc:
+            results.append({"endpoint": device.endpoint, "status": "failed", "error": str(exc)})
+        except Exception as exc:
+            results.append({"endpoint": device.endpoint, "status": "failed", "error": str(exc)})
+
+    return JsonResponse({"ok": True, "results": results})
+
+
+def service_worker(request):
+    """Serve the push service worker with the correct content type."""
+    from django.http import HttpResponse
+    from django.template.loader import render_to_string
+    from django.conf import settings
+
+    sw_path = settings.BASE_DIR / 'static' / 'js' / 'sw.js'
+    try:
+        content = sw_path.read_text(encoding='utf-8')
+    except OSError:
+        content = ''
+    response = HttpResponse(content, content_type='application/javascript')
+    response['Cache-Control'] = 'no-store'
+    return response
+

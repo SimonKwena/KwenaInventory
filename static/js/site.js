@@ -25,17 +25,17 @@ function getCsrfToken() {
     return match ? decodeURIComponent(match[1]) : '';
 }
 
-/* The Browse nav link intentionally shows no cart badge (the cart lives on
-   Home), so adding an item must not re-create a red dot there. This handler
-   is kept as a no-op for call-site compatibility. */
+/* Update the cart badge wherever it appears (nav, catalog icon, etc.). */
 function updateCartBadge(counts) {
-    const browseLink = document.querySelector('.nav-link[href$="/catalog/"]');
-    if (browseLink) {
-        const badge = browseLink.querySelector('.nav-badge');
-        if (badge) {
-            badge.remove();
+    const total = (counts && counts.total) || 0;
+    document.querySelectorAll('[data-nav-badge="cart"]').forEach(function (badge) {
+        if (total > 0) {
+            badge.textContent = total;
+            badge.removeAttribute('hidden');
+        } else {
+            badge.setAttribute('hidden', '');
         }
-    }
+    });
 }
 
 /* Lightweight toast used for "added to cart" feedback (survives live refresh). */
@@ -447,72 +447,209 @@ function gearroomInit() {
     }
 
     /* ---------- Catalog search / filter ---------- */
-    const catalogSearch = document.getElementById('catalog-search');
+    const catalogSidebar = document.getElementById('catalog-sidebar');
+    const catalogSearch = catalogSidebar ? catalogSidebar.querySelector('.catalog-sidebar-search input') : null;
+    const catalogCategoryInputs = document.querySelectorAll('[data-filter="category"]');
     const catalogLocationFilter = document.getElementById('catalog-location-filter');
     const catalogAvailabilityFilter = document.getElementById('catalog-availability-filter');
     const catalogResetBtn = document.getElementById('catalog-filter-reset');
     const catalogStatusEl = document.getElementById('catalog-filter-status');
+
+    function getCatalogFilters() {
+        const categories = [];
+        catalogCategoryInputs.forEach(function (cb) {
+            if (cb.checked) categories.push(cb.value);
+        });
+        return {
+            search: (catalogSearch ? catalogSearch.value : '').trim().toLowerCase(),
+            categories: categories,
+            location: catalogLocationFilter ? catalogLocationFilter.value : '',
+            availability: catalogAvailabilityFilter ? catalogAvailabilityFilter.value : ''
+        };
+    }
+
+    function readCatalogFiltersFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            search: (params.get('q') || '').trim().toLowerCase(),
+            categories: params.get('categories') ? params.get('categories').split(',').filter(Boolean) : [],
+            location: params.get('location') || '',
+            availability: params.get('availability') || ''
+        };
+    }
+
+    function writeCatalogFiltersToUrl(f) {
+        const params = new URLSearchParams(window.location.search);
+        if (f.search) {
+            params.set('q', f.search);
+        } else {
+            params.delete('q');
+        }
+        if (f.categories.length) {
+            params.set('categories', f.categories.join(','));
+        } else {
+            params.delete('categories');
+        }
+        if (f.location) {
+            params.set('location', f.location);
+        } else {
+            params.delete('location');
+        }
+        if (f.availability) {
+            params.set('availability', f.availability);
+        } else {
+            params.delete('availability');
+        }
+        const qs = params.toString();
+        const newUrl = window.location.pathname + (qs ? '?' + qs : '');
+        if (newUrl !== window.location.pathname + window.location.search) {
+            history.replaceState(null, '', newUrl);
+        }
+    }
+
+    function applyCatalogFiltersFromUrl() {
+        const f = readCatalogFiltersFromUrl();
+        if (catalogSearch) catalogSearch.value = f.search;
+        catalogCategoryInputs.forEach(function (cb) {
+            cb.checked = f.categories.indexOf(cb.value) !== -1;
+        });
+        if (catalogLocationFilter) catalogLocationFilter.value = f.location;
+        if (catalogAvailabilityFilter) catalogAvailabilityFilter.value = f.availability;
+        applyCatalogFilters();
+    }
+
+    function applyCatalogFilters() {
+        const f = getCatalogFilters();
+        const cards = document.querySelectorAll('.product-card');
+        let totalVisible = 0;
+        cards.forEach(function (card) {
+            const location = card.getAttribute('data-location') || '';
+            const available = parseInt(card.getAttribute('data-available') || '0', 10);
+            const category = card.getAttribute('data-category') || '';
+            const search = card.getAttribute('data-search') || '';
+            let match = true;
+            if (f.categories.length && f.categories.indexOf(category) === -1) match = false;
+            if (f.location && location !== f.location) match = false;
+            if (f.availability === 'available' && available <= 0) match = false;
+            if (f.availability === 'out' && available > 0) match = false;
+            if (f.search && search.toLowerCase().indexOf(f.search) === -1) match = false;
+            card.style.display = match ? '' : 'none';
+            if (match) totalVisible++;
+        });
+        const emptyEl = document.querySelector('.catalog-empty');
+        if (emptyEl) {
+            emptyEl.style.display = totalVisible ? 'none' : '';
+        }
+        if (catalogStatusEl) {
+            const noun = totalVisible === 1 ? 'item' : 'items';
+            catalogStatusEl.textContent = totalVisible + ' ' + noun + (totalVisible ? ' shown' : '');
+        }
+    }
+
     if (catalogSearch || catalogLocationFilter) {
-        function getCatalogFilters() {
-            return {
-                search: (catalogSearch ? catalogSearch.value : '').trim().toLowerCase(),
-                location: catalogLocationFilter ? catalogLocationFilter.value : '',
-                availability: catalogAvailabilityFilter ? catalogAvailabilityFilter.value : ''
-            };
-        }
-        function applyCatalogFilters() {
-            const f = getCatalogFilters();
-            const sections = document.querySelectorAll('.catalog-section');
-            let totalVisible = 0;
-            sections.forEach(function (section) {
-                const rows = section.querySelectorAll('.catalog-item-row');
-                let sectionVisible = 0;
-                rows.forEach(function (row) {
-                    const location = row.getAttribute('data-location') || '';
-                    const available = parseInt(row.getAttribute('data-available') || '0', 10);
-                    const search = row.getAttribute('data-search') || '';
-                    let match = true;
-                    if (f.location && location !== f.location) match = false;
-                    if (f.availability === 'available' && available <= 0) match = false;
-                    if (f.availability === 'out' && available > 0) match = false;
-                    if (f.search && search.toLowerCase().indexOf(f.search) === -1) match = false;
-                    row.style.display = match ? '' : 'none';
-                    if (match) sectionVisible++;
-                });
-                const body = section.querySelector('.group-body');
-                if (body) {
-                    body.style.display = sectionVisible ? '' : 'none';
-                }
-                const toggle = section.querySelector('.group-toggle');
-                if (toggle && sectionVisible === 0) {
-                    toggle.setAttribute('aria-expanded', 'false');
-                }
-                totalVisible += sectionVisible;
-            });
-            if (catalogStatusEl) {
-                const noun = totalVisible === 1 ? 'item' : 'items';
-                catalogStatusEl.textContent = totalVisible + ' ' + noun + (totalVisible ? ' shown' : '');
-            }
-        }
         if (catalogSearch) {
-            catalogSearch.addEventListener('input', applyCatalogFilters);
+            catalogSearch.addEventListener('input', function () {
+                applyCatalogFilters();
+                writeCatalogFiltersToUrl(getCatalogFilters());
+            });
         }
+        catalogCategoryInputs.forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                applyCatalogFilters();
+                writeCatalogFiltersToUrl(getCatalogFilters());
+            });
+        });
         if (catalogLocationFilter) {
-            catalogLocationFilter.addEventListener('change', applyCatalogFilters);
+            catalogLocationFilter.addEventListener('change', function () {
+                applyCatalogFilters();
+                writeCatalogFiltersToUrl(getCatalogFilters());
+            });
         }
         if (catalogAvailabilityFilter) {
-            catalogAvailabilityFilter.addEventListener('change', applyCatalogFilters);
+            catalogAvailabilityFilter.addEventListener('change', function () {
+                applyCatalogFilters();
+                writeCatalogFiltersToUrl(getCatalogFilters());
+            });
         }
         if (catalogResetBtn) {
             catalogResetBtn.addEventListener('click', function () {
                 if (catalogSearch) catalogSearch.value = '';
+                catalogCategoryInputs.forEach(function (cb) { cb.checked = false; });
                 if (catalogLocationFilter) catalogLocationFilter.value = '';
                 if (catalogAvailabilityFilter) catalogAvailabilityFilter.value = '';
                 applyCatalogFilters();
+                writeCatalogFiltersToUrl(getCatalogFilters());
             });
         }
-        applyCatalogFilters();
+        const catalogSearchForm = catalogSearch ? catalogSearch.closest('form') : null;
+        if (catalogSearchForm) {
+            catalogSearchForm.addEventListener('submit', function () {
+                const f = getCatalogFilters();
+                f.search = (catalogSearch ? catalogSearch.value : '').trim().toLowerCase();
+                writeCatalogFiltersToUrl(f);
+                catalogSearchForm.action = window.location.pathname + window.location.search;
+            });
+        }
+        applyCatalogFiltersFromUrl();
     }
+
+    window.addEventListener('popstate', function () {
+        if (catalogSearch || catalogLocationFilter) {
+            applyCatalogFiltersFromUrl();
+        }
+    });
+
+    // Keep the visible quantity input in sync with the hidden field the form
+    // actually submits, and clamp it to the current stock limit.
+    document.querySelectorAll('.catalog-qty').forEach(function (input) {
+        input.addEventListener('input', function () {
+            const form = input.closest('form');
+            if (!form) return;
+            const hidden = form.querySelector('.catalog-qty-hidden');
+            if (hidden) hidden.value = input.value || '1';
+            const max = parseInt(input.max || '1', 10);
+            if (parseInt(input.value, 10) > max) {
+                input.value = max;
+                if (hidden) hidden.value = String(max);
+            }
+        });
+    });
+
+    // Catalog add-to-cart via AJAX: stay on the catalog page and show a toast
+    // message instead of navigating away.
+    document.querySelectorAll('.catalog-add-form').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            const btn = form.querySelector('button[type="submit"]');
+            if (btn) {
+                btn.disabled = true;
+            }
+            const formData = new FormData(form);
+            fetch(form.getAttribute('action'), {
+                method: 'POST',
+                headers: { 'x-requested-with': 'XMLHttpRequest' },
+                body: formData,
+                credentials: 'same-origin',
+            })
+                .then(function (resp) { return resp.ok ? resp.json() : null; })
+                .then(function (data) {
+                    if (data && data.message) {
+                        showToast(data.message, { kind: 'success' });
+                    }
+                    if (data && data.counts) {
+                        updateCartBadge(data.counts);
+                    }
+                })
+                .catch(function () {
+                    showToast('Could not add item. Please try again.', { kind: 'error' });
+                })
+                .finally(function () {
+                    if (btn) {
+                        btn.disabled = false;
+                    }
+                });
+        });
+    });
 
     /* ---------- All items: full filter system + "+N more" ---------- */
     const allItemsTable = document.getElementById('all-items-table');
@@ -1093,12 +1230,17 @@ function gearroomInit() {
 
     if (transactionTypeRadios.length) {
         transactionTypeRadios.forEach((radio) => {
-            radio.addEventListener('change', updateActionFields);
+            if (!radio.__qaBound) {
+                radio.__qaBound = true;
+                radio.addEventListener('change', updateActionFields);
+            }
         });
         updateActionFields();
     }
 
         if (itemRowsContainer) {
+            if (!itemRowsContainer.__qaBound) {
+                itemRowsContainer.__qaBound = true;
             itemRowsContainer.addEventListener('change', function (event) {
                 if (event.target && event.target.matches('select[name="item_ids"]')) {
                     filterCheckinLoans();
@@ -1140,11 +1282,14 @@ function gearroomInit() {
                     filterCheckinLoans();
                 }
             });
+            }
             itemRowsContainer.querySelectorAll('.item-row').forEach(filterItemsByLocation);
             syncRemoveButtonStates();
         }
 
         if (condAllSelect) {
+            if (!condAllSelect.__qaBound) {
+                condAllSelect.__qaBound = true;
             condAllSelect.addEventListener('change', function () {
                 const val = condAllSelect.value;
                 if (!val) {
@@ -1157,6 +1302,7 @@ function gearroomInit() {
                 }
                 condAllSelect.value = '';
             });
+            }
         }
 
 
@@ -1235,6 +1381,8 @@ function gearroomInit() {
     const clearHomeForm = document.querySelector('#clear-home-form');
 
     if (clearHomeForm && homeForm) {
+        if (!clearHomeForm.__qaBound) {
+            clearHomeForm.__qaBound = true;
         clearHomeForm.addEventListener('click', function () {
             homeForm.reset();
             resetItemRows();
@@ -1267,9 +1415,12 @@ function gearroomInit() {
             }
             syncRemoveButtonStates();
         });
+        }
     }
     if (addItemRow && itemRowsContainer) {
-        addItemRow.addEventListener('click', function () {
+        if (!addItemRow.__qaBound) {
+            addItemRow.__qaBound = true;
+            addItemRow.addEventListener('click', function () {
             const firstRow = itemRowsContainer.querySelector('.item-row');
             if (!firstRow) {
                 return;
@@ -1295,10 +1446,22 @@ function gearroomInit() {
             itemRowsContainer.appendChild(clone);
             syncRemoveButtonStates();
         });
+        }
     }
 
     /* ---------- Camera QR scanners ---------- */
     const cameraScanners = (window.__cameraScanners = window.__cameraScanners || []);
+    // Release any stream whose video element has been removed from the DOM
+    // (e.g. by a live region swap) before we rebuild the registry below.
+    cameraScanners.forEach(function (s) {
+        if (s && typeof s.stop === 'function' && s.video && !document.contains(s.video)) {
+            try {
+                s.stop();
+            } catch (err) {
+                /* ignore */
+            }
+        }
+    });
     cameraScanners.length = 0;
 
     /* ---------- Slip code helpers (scanned from a desk slip QR) ---------- */
@@ -1641,6 +1804,10 @@ function gearroomInit() {
             if (!scanning || !mediaStream) {
                 return;
             }
+            if (!document.contains(video)) {
+                stopCamera();
+                return;
+            }
             try {
                 if (detector) {
                     const results = await detector.detect(video);
@@ -1810,7 +1977,14 @@ function gearroomInit() {
             stopCamera();
         });
 
-        cameraScanners.push(stopCamera);
+        cameraScanners.push({
+            stop: stopCamera,
+            isActive: function () {
+                return scanning || !!mediaStream;
+            },
+            panel: panel,
+            video: video,
+        });
     }
 
     createCameraScanner({
@@ -2009,11 +2183,14 @@ function gearroomInit() {
 /* Stop any running cameras when the page unloads (bound once). */
 window.addEventListener('beforeunload', function () {
     const scanners = window.__cameraScanners || [];
-    scanners.forEach(function (stop) {
-        try {
-            stop();
-        } catch (err) {
-            /* ignore */
+    scanners.forEach(function (s) {
+        const stop = s && typeof s.stop === 'function' ? s.stop : s;
+        if (typeof stop === 'function') {
+            try {
+                stop();
+            } catch (err) {
+                /* ignore */
+            }
         }
     });
 });
@@ -2080,6 +2257,137 @@ function initModals() {
             closeModal(target);
         }
     });
+}
+
+/* ---------- First-login onboarding popup ---------- */
+/* An interactive, role-specific step carousel. Step state lives client-side;
+   any dismissal clears the server session flag (skip-for-now) and the final
+   "Let's go!" marks the popup seen permanently so it never returns. */
+function initOnboarding() {
+    const overlay = document.getElementById('onboarding-modal');
+    if (!overlay) {
+        return;
+    }
+
+    // Immediately clear the session flag so this popup only ever shows on the
+    // very first page load after login. The modal itself stays open until the
+    // user dismisses it; subsequent navigations won't re-trigger it.
+    const csrf = getCsrfToken();
+    fetch(appUrl('onboarding/mark-seen/'), {
+        method: 'POST',
+        headers: {
+            'x-requested-with': 'XMLHttpRequest',
+            'X-CSRFToken': csrf,
+        },
+        credentials: 'same-origin',
+    }).catch(function () { /* best-effort */ });
+
+    const steps = Array.prototype.slice.call(overlay.querySelectorAll('.onboarding-step'));
+    if (!steps.length) {
+        return;
+    }
+    const dotsWrap = document.getElementById('onboarding-dots');
+    const backBtn = document.getElementById('onboarding-back');
+    const nextBtn = document.getElementById('onboarding-next');
+    const skipBtn = document.getElementById('onboarding-skip');
+    const closeBtn = document.getElementById('onboarding-close');
+
+    let index = 0;
+
+    // Build one dot per step (clickable to jump).
+    steps.forEach(function (step, i) {
+        if (!dotsWrap) {
+            return;
+        }
+        const dot = document.createElement('button');
+        dot.type = 'button';
+        dot.className = 'onboarding-dot';
+        dot.setAttribute('aria-label', 'Go to step ' + (i + 1));
+        dot.addEventListener('click', function () {
+            goTo(i);
+        });
+        dotsWrap.appendChild(dot);
+    });
+    const dots = dotsWrap ? Array.prototype.slice.call(dotsWrap.children) : [];
+
+    function goTo(i) {
+        index = Math.max(0, Math.min(i, steps.length - 1));
+        steps.forEach(function (step, si) {
+            step.classList.toggle('is-active', si === index);
+        });
+        dots.forEach(function (dot, di) {
+            dot.classList.toggle('is-active', di === index);
+        });
+        const last = index === steps.length - 1;
+        if (backBtn) {
+            backBtn.hidden = index === 0;
+        }
+        // The Next button becomes "Let's go!" on the final step and dismisses
+        // the popup permanently; on earlier steps it simply advances.
+        if (nextBtn) {
+            if (last) {
+                nextBtn.textContent = "Let's go!";
+                nextBtn.classList.add('onboarding-done');
+            } else {
+                nextBtn.textContent = 'Next';
+                nextBtn.classList.remove('onboarding-done');
+            }
+        }
+    }
+
+    function dismiss(permanent) {
+        const csrf = getCsrfToken();
+        const body = new URLSearchParams();
+        if (permanent) {
+            body.set('permanent', '1');
+        }
+        fetch(appUrl('onboarding/mark-seen/'), {
+            method: 'POST',
+            headers: {
+                'x-requested-with': 'XMLHttpRequest',
+                'X-CSRFToken': csrf,
+            },
+            body: body.toString(),
+            credentials: 'same-origin',
+        }).catch(function () { /* best-effort; hide anyway */ });
+        overlay.classList.remove('is-open');
+        overlay.setAttribute('hidden', '');
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', function () {
+            if (index === steps.length - 1) {
+                dismiss(true);
+            } else {
+                goTo(index + 1);
+            }
+        });
+    }
+    if (backBtn) {
+        backBtn.addEventListener('click', function () { goTo(index - 1); });
+    }
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function () { dismiss(true); });
+    }
+
+    // Backdrop click (outside the card) and Escape dismiss permanently —
+    // this popup is shown only on the user's very first login, so any
+    // dismissal marks it as seen forever.
+    overlay.addEventListener('click', function (event) {
+        if (event.target === overlay) {
+            dismiss(true);
+        }
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape') {
+            return;
+        }
+        if (overlay.classList.contains('is-open')) {
+            dismiss(true);
+        }
+    });
+
+    goTo(0);
 }
 
 function openModal(modal) {
@@ -2257,6 +2565,7 @@ document.addEventListener('DOMContentLoaded', function () {
     gearroomInit();
     initCollapsibles();
     initModals();
+    initOnboarding();
     tickRelativeTimes();
     // Keep "minutes overdue" / "due in" labels ticking as time passes,
     // independent of data edits (a version bump alone won't fire here).
@@ -2341,6 +2650,20 @@ document.addEventListener('DOMContentLoaded', function () {
         return regionIdOf(el);
     }
 
+    // True when one of the registered camera scanners is actively streaming a
+    // <video> that lives inside `container`. Used to block live region merges
+    // that would otherwise tear down the camera mid-scan.
+    function regionHasLiveCamera(container) {
+        if (!container) {
+            return false;
+        }
+        const scanners = window.__cameraScanners || [];
+        return scanners.some(function (s) {
+            return s && typeof s.isActive === 'function' && s.isActive() &&
+                s.video && container.contains(s.video);
+        });
+    }
+
     // True when the user is actively interacting with the given region: a
     // text-entry inside it has focus, the pointer is currently hovering over
     // it (about to click), or a mouse/touch button is held down over it. In
@@ -2352,6 +2675,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const container = document.querySelector('[data-region="' + id + '"]');
         if (!container) {
             return false;
+        }
+        if (regionHasLiveCamera(container)) {
+            return true;
         }
         if (document.activeElement && isTextEntry(document.activeElement)) {
             if (regionIdOf(document.activeElement) === id) {
@@ -2432,18 +2758,9 @@ document.addEventListener('DOMContentLoaded', function () {
             return; // identical (bar the token) — don't disturb
         }
         // Capture the user's current interactive state so a refresh doesn't
-        // reset it: the quantity they typed into each catalog tile, and which
-        // catalog groups they have expanded.
-        let savedQty = null;
+        // reset it: which catalog groups they have expanded.
         let savedExpanded = null;
         if (id === 'catalog-sections') {
-            savedQty = {};
-            container.querySelectorAll('.cart-qty').forEach(function (input) {
-                const key = input.id || input.getAttribute('data-item');
-                if (key) {
-                    savedQty[key] = input.value;
-                }
-            });
             savedExpanded = {};
             container.querySelectorAll('.group-body').forEach(function (body) {
                 if (!body.classList.contains('collapsed')) {
@@ -2471,7 +2788,6 @@ document.addEventListener('DOMContentLoaded', function () {
         // action they picked, and which loan they selected.
         let savedAction = null;
         let savedLoan = null;
-        let loansCameraOpen = false;
         if (id === 'home-qa-actions') {
             const checked = container.querySelector('input[name="transaction_type"]:checked');
             savedAction = checked ? checked.value : null;
@@ -2479,9 +2795,17 @@ document.addEventListener('DOMContentLoaded', function () {
         if (id === 'home-qa-loans') {
             const sel = container.querySelector('#source-request-id');
             savedLoan = sel ? sel.value : '';
-            const cam = container.querySelector('#home-camera-panel');
-            loansCameraOpen = !!cam && cam.style.display !== 'none';
         }
+        (window.__cameraScanners || []).forEach(function (s) {
+            if (s && typeof s.isActive === 'function' && s.isActive() &&
+                s.video && container.contains(s.video)) {
+                try {
+                    s.stop();
+                } catch (err) {
+                    /* ignore */
+                }
+            }
+        });
         container.innerHTML = newInner;
         // Restore the user's chosen action on the freshly-rendered radios. If
         // the action they had selected is no longer offered (e.g. their only
@@ -2509,12 +2833,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (stillThere) {
                         sel.value = savedLoan;
                     }
-                }
-            }
-            if (loansCameraOpen) {
-                const cam = container.querySelector('#home-camera-panel');
-                if (cam) {
-                    cam.style.display = 'block';
                 }
             }
         }
@@ -2552,14 +2870,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         // Restore the catalog interactive state we captured above.
         if (id === 'catalog-sections') {
-            if (savedQty) {
-                container.querySelectorAll('.cart-qty').forEach(function (input) {
-                    const key = input.id || input.getAttribute('data-item');
-                    if (key && savedQty[key] != null) {
-                        input.value = savedQty[key];
-                    }
-                });
-            }
             if (savedExpanded) {
                 container.querySelectorAll('.group-body').forEach(function (body) {
                     if (savedExpanded[body.id]) {
@@ -2577,6 +2887,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     toggleAllBtn.textContent = anyCollapsed ? 'Expand all' : 'Collapse all';
                 }
             }
+            if (typeof applyCatalogFilters === 'function') {
+                applyCatalogFilters();
+            }
         }
         // NOTE: we deliberately do NOT re-run gearroomInit() here. The
         // regions are server-rendered display fragments (tables / stats / lists);
@@ -2589,18 +2902,17 @@ document.addEventListener('DOMContentLoaded', function () {
     async function mergeRegions(forceId) {
         const path = window.location.pathname;
         const focused = focusedRegionId();
-        // Gather every region the user is currently interacting with so the
-        // server omits them too (a focused text-entry, a hovered region, or an
-        // expanded catalog group). The client still double-checks on merge.
-        // When an explicit action just succeeded on `forceId`, we DON'T skip it
-        // server-side — the user expects that region to refresh in response.
-        const skip = [];
+        // The catalog product grid is NOT live-refreshed by the main poller —
+        // only stock quantities update there, via a separate lightweight call.
+        // Refreshing the whole grid would re-render it server-side and discard
+        // the user's active filter state.
+        const skip = ['catalog-sections'];
         if (focused) {
             skip.push(focused);
         }
         document.querySelectorAll('[data-region]').forEach(function (region) {
             const id = region.getAttribute('data-region');
-            if (!id || id === focused || id === forceId) {
+            if (!id || id === focused || id === forceId || id === 'catalog-sections') {
                 return;
             }
             if (regionIsInteracting(id)) {
@@ -2610,7 +2922,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const skipParam = skip.length
             ? '&skip=' + skip.map(encodeURIComponent).join(',')
             : '';
-        const qs = 'path=' + encodeURIComponent(path) +
+        const fullPath = window.location.pathname + window.location.search;
+        const qs = 'path=' + encodeURIComponent(fullPath) +
             (focused ? '&focused=' + encodeURIComponent(focused) : '') + skipParam;
         try {
             const resp = await fetch(appUrl('live/region/?') + qs, {
@@ -2717,6 +3030,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     .then(function (r) { return r.ok ? r.json() : null; })
                     .then(function (d) { if (d) { applyState(d); } })
                     .catch(function () { /* ignore */ });
+                if (typeof updateCatalogStock === 'function') {
+                    updateCatalogStock();
+                }
             })
             .catch(function () {
                 // Network failure: fall back to the normal form submission so
@@ -2747,5 +3063,229 @@ document.addEventListener('DOMContentLoaded', function () {
     // Also merge regions on a fixed cadence so the page body stays live even
     // for changes the version counter might lag on (e.g. the same second).
     setInterval(mergeRegions, 5000);
+
+    // Catalog stock poller — updates only the quantity badges on product cards
+    // without touching the rest of the grid. This keeps the user's filters and
+    // scroll position intact while still showing live stock numbers.
+    function updateCatalogStock() {
+        try {
+            const cards = document.querySelectorAll('.product-card');
+            if (!cards.length) {
+                return;
+            }
+            const ids = [];
+            cards.forEach(function (card) {
+                const pk = card.getAttribute('data-item-id');
+                if (pk) ids.push(pk);
+            });
+            if (!ids.length) {
+                return;
+            }
+            const url = appUrl('catalog/stock/') + '?ids=' + encodeURIComponent(ids.join(','));
+            fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+                .then(function (resp) {
+                    if (!resp.ok) {
+                        console.error('catalog/stock/ failed:', resp.status, resp.statusText);
+                    }
+                    return resp.ok ? resp.json() : null;
+                })
+                .then(function (data) {
+                    if (!data || !data.items) {
+                        return;
+                    }
+                    cards.forEach(function (card) {
+                        const pk = card.getAttribute('data-item-id');
+                        if (!pk) return;
+                        const info = data.items[pk];
+                        if (!info) return;
+                        const badge = card.querySelector('.product-card-badge');
+                        if (!badge) return;
+                        if (info.available > 0) {
+                            badge.className = 'pill pill-success product-card-badge';
+                            badge.textContent = info.available + ' in stock';
+                        } else {
+                            badge.className = 'pill pill-danger product-card-badge';
+                            badge.textContent = 'Out';
+                        }
+                        card.setAttribute('data-available', String(info.available));
+                        const qtyInput = card.querySelector('.catalog-qty');
+                        if (qtyInput && parseInt(qtyInput.value, 10) > info.available) {
+                            qtyInput.value = Math.max(1, info.available);
+                        }
+                        if (qtyInput) {
+                            qtyInput.max = Math.max(1, info.available);
+                        }
+                        const hiddenQty = card.querySelector('.catalog-qty-hidden');
+                        if (hiddenQty) {
+                            hiddenQty.value = qtyInput ? qtyInput.value : '1';
+                        }
+                    });
+                })
+                .catch(function (err) {
+                    console.error('catalog/stock/ error:', err);
+                });
+        } catch (err) {
+            console.error('updateCatalogStock error:', err);
+        }
+    }
+
+    if (document.querySelector('.product-card')) {
+        setInterval(updateCatalogStock, 3000);
+        updateCatalogStock();
+    }
+
+    const backToTop = document.getElementById('back-to-top');
+    if (backToTop) {
+        function updateBackToTop() {
+            if (window.scrollY > 400) {
+                backToTop.classList.add('is-visible');
+                backToTop.removeAttribute('aria-hidden');
+                backToTop.removeAttribute('tabindex');
+            } else {
+                backToTop.classList.remove('is-visible');
+                backToTop.setAttribute('aria-hidden', 'true');
+                backToTop.setAttribute('tabindex', '-1');
+            }
+        }
+        window.addEventListener('scroll', updateBackToTop, { passive: true });
+        backToTop.addEventListener('click', function () {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        updateBackToTop();
+    }
+
+    (function initPushPermissionBar() {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        const bar = document.getElementById('push-permission-bar');
+        if (!bar) return;
+        const enableBtn = document.getElementById('push-permission-enable');
+        const dismissBtn = document.getElementById('push-permission-dismiss');
+        if (!enableBtn || !dismissBtn) return;
+
+        if (sessionStorage.getItem('push_prompt_dismissed') === '1') {
+            bar.hidden = true;
+            return;
+        }
+
+        enableBtn.addEventListener('click', async function () {
+            bar.hidden = true;
+            const perm = await Notification.requestPermission();
+            if (perm === 'granted') {
+                for (const attempt of [1, 2, 3]) {
+                    const sub = await subscribeUser();
+                    if (sub) break;
+                    await new Promise(function (r) { setTimeout(r, 500); });
+                }
+            }
+        });
+
+        dismissBtn.addEventListener('click', function () {
+            bar.hidden = true;
+            sessionStorage.setItem('push_prompt_dismissed', '1');
+        });
+
+        bar.hidden = false;
+    })();
+
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+        const vapidPublicKey = (window.__WEBPUSH_VAPID_PUBLIC_KEY__ || '').trim();
+        const csrfToken = getCsrfToken();
+        let currentSubscription = null;
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        async function ensureServiceWorker() {
+            const registration = await navigator.serviceWorker.register('/sw.js');
+            return registration;
+        }
+
+        async function subscribeUser() {
+            if (!vapidPublicKey) {
+                console.warn('Web push VAPID public key is not set.');
+                return null;
+            }
+            try {
+                const registration = await ensureServiceWorker();
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+                });
+                await saveSubscription(subscription);
+                currentSubscription = subscription;
+                return subscription;
+            } catch (err) {
+                console.error('Web push subscription failed:', err);
+                return null;
+            }
+        }
+
+        async function saveSubscription(subscription) {
+            const endpoint = subscription.endpoint;
+            const auth = subscription.getKey('auth');
+            const p256dh = subscription.getKey('p256dh');
+            const body = JSON.stringify({
+                endpoint: endpoint,
+                keys: {
+                    auth: btoa(String.fromCharCode.apply(null, new Uint8Array(auth))),
+                    p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(p256dh))),
+                },
+            });
+            const resp = await fetch(appUrl('webpush/subscribe/'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: body,
+            });
+            return resp.ok;
+        }
+
+        async function unsubscribeUser() {
+            if (!currentSubscription) {
+                const registration = await ensureServiceWorker();
+                currentSubscription = await registration.pushManager.getSubscription();
+            }
+            if (!currentSubscription) {
+                return true;
+            }
+            const endpoint = currentSubscription.endpoint;
+            const resp = await fetch(appUrl('webpush/unsubscribe/'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify({ endpoint: endpoint }),
+            });
+            const ok = resp.ok;
+            if (ok) {
+                await currentSubscription.unsubscribe();
+                currentSubscription = null;
+            }
+            return ok;
+        }
+
+        async function initWebPush() {
+            try {
+                const registration = await ensureServiceWorker();
+                const subscription = await registration.pushManager.getSubscription();
+                currentSubscription = subscription || null;
+            } catch (err) {
+                console.warn('Web push init skipped.', err);
+            }
+        }
+
+        initWebPush();
+    }
 })();
 

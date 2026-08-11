@@ -1,0 +1,158 @@
+{% if request.session.show_onboarding %}
+{% load static %}
+<div class="onboarding-overlay is-open" id="onboarding-modal" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" data-role="{{ user_role }}">
+    <div class="onboarding-card">
+        <button type="button" class="modal-close" id="onboarding-close" aria-label="Skip onboarding">&times;</button>
+
+        <div class="onboarding-head">
+            <img class="onboarding-logo" src="{% static 'images/kwena-logo-3.png' %}" alt="Kwena Music">
+            <span class="onboarding-role-pill">{{ user_role_label }}</span>
+        </div>
+
+        <div class="onboarding-scroll">
+            {# ---- Step 1: Welcome (all roles) ---- #}
+            <section class="onboarding-step" data-step="0">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7Zm0 2.3 6.5 3.6L12 11.5 5.5 7.9Zm-7 4.8 6 3.3v6.5l-6-3.3Zm14 0v6.5l-6 3.3v-6.5Z"/></svg>
+                </span>
+                <h2 id="onboarding-title">Welcome to Kwena Inventory</h2>
+                <p class="section-note">Borrow and return instruments and equipment. Here's a quick tour of what you can do.</p>
+            </section>
+
+            {# ---- Members: the Quick Action (before Browse) ---- #}
+            {% if user_role == "student" or user_role == "teacher" or user_role == "guest" %}
+            <section class="onboarding-step" data-step="1">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M3 7h18a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Zm0 6h18a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"/></svg>
+                </span>
+                <h2>The Quick Action</h2>
+                <p class="section-note">The <strong>Quick Action</strong> is your all-in-one workspace. Pick an action &mdash; <strong>Book Ahead</strong>, <strong>Check Out</strong>, or <strong>Check In</strong> &mdash; then scan a QR code or choose items. Submitting a request generates your slip code for you straight away.</p>
+            </section>
+            {% endif %}
+
+            {# ---- Members: browse & request ---- #}
+            {% if user_role == "student" or user_role == "teacher" or user_role == "guest" %}
+            <section class="onboarding-step" data-step="2">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M10 2a8 8 0 1 0 4.9 14.3l5.4 5.4 1.4-1.4-5.4-5.4A8 8 0 0 0 10 2Zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Z"/></svg>
+                </span>
+                <h2>Browse and request</h2>
+                <p class="section-note">From <strong>Browse Items</strong> you can see everything available. Add what you need to your cart, then submit a <strong>Book Ahead</strong> or <strong>Check Out</strong> request. Your request waits for a staff member to approve it before any stock moves.</p>
+            </section>
+            {% endif %}
+
+            {# ---- Student: check in & track ---- #}
+            {% if user_role == "student" %}
+            <section class="onboarding-step" data-step="3">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9Zm0 2a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm-1 3v5l4 2 .9-1.8L13 9.9V5Z"/></svg>
+                </span>
+                <h2>Check in and track</h2>
+                <p class="section-note">To return gear, open <strong>Check In</strong>, pick the loan (by slip code) and set its condition. Your Home page keeps your borrowed gear, pending requests, and reservations in one place.</p>
+            </section>
+            {% endif %}
+
+            {# ---- Teacher: maintenance + check in ---- #}
+            {% if user_role == "teacher" %}
+            <section class="onboarding-step" data-step="3">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M14.7 2.3a3 3 0 0 1 4.2 4.2l-1 1 2.1 2.1-1.4 1.5-2.1-2.1-3.6 3.6 1 3.5-1.6 1.6-2.4-8.5Zm-1 11 2.4 8.5-1.6 1.6-3.5-1-3.6 3.6-2.1-2.1L7 17l-3.5-1L2 9.8l1.6-1.6 8.5 2.4Z"/></svg>
+                </span>
+                <h2>Report maintenance</h2>
+                <p class="section-note">Found a fault? Use the <strong>Maintenance</strong> tab to report broken or serviced gear. Staff will see it and arrange a repair.</p>
+            </section>
+            <section class="onboarding-step" data-step="4">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9Zm0 2a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm-1 3v5l4 2 .9-1.8L13 9.9V5Z"/></svg>
+                </span>
+                <h2>Check in and track</h2>
+                <p class="section-note">To return gear, open <strong>Check In</strong>, pick the loan (by slip code) and set its condition. Your Home page keeps your borrowed gear and requests together.</p>
+            </section>
+            {% endif %}
+
+            {# ---- Guest: pending approval + full access ---- #}
+            {% if user_role == "guest" %}
+            <section class="onboarding-step" data-step="3">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7Zm0 2.3 6.5 3.6L12 11.5 5.5 7.9Zm-7 4.8 6 3.3v6.5l-6-3.3Zm14 0v6.5l-6 3.3v-6.5Z"/></svg>
+                </span>
+                <h2>Pending approval</h2>
+                <p class="section-note">Staff must approve your requests before any stock moves. You'll get a notification once it's approved, and your slip code is your reference at the counter.</p>
+            </section>
+            <section class="onboarding-step" data-step="4">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-7 2-7 5v1h14v-1c0-3-3-5-7-5Z"/></svg>
+                </span>
+                <h2>Full access with an account</h2>
+                <p class="section-note">For direct check-outs and automatic history, sign in with a <strong>@kwenamusic.co.za</strong> Google account, or ask staff to set up a local account.</p>
+            </section>
+            {% endif %}
+
+            {# ---- Staff: Staff Desk (their Quick Action) ---- #}
+            {% if user_role == "staff" or user_role == "admin" or user_role == "superadmin" %}
+            <section class="onboarding-step" data-step="1">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M3 7h18a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Zm0 6h18a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"/></svg>
+                </span>
+                <h2>The Staff Desk</h2>
+                <p class="section-note">The <strong>Staff Desk</strong> is your counter workspace. Pick <strong>Check Out</strong> or <strong>Check In</strong>, then scan a slip code or choose items. Stock moves immediately for staff.</p>
+            </section>
+            {% endif %}
+
+            {# ---- Staff: approve requests + manage stock ---- #}
+            {% if user_role == "staff" %}
+            <section class="onboarding-step" data-step="2">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M9.55 17.6 4.4 12.45l1.4-1.4 3.75 3.75 8.25-8.25 1.4 1.4-9.65 9.65Z"/></svg>
+                </span>
+                <h2>Approve member requests</h2>
+                <p class="section-note">Requests from students and guests sit as <strong>pending</strong>. Approve them in <strong>Manage → Requests</strong> to release the gear, or hand over approved reservations at pickup.</p>
+            </section>
+            <section class="onboarding-step" data-step="3">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M3 7h18a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Zm0 6h18a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"/></svg>
+                </span>
+                <h2>Manage stock</h2>
+                <p class="section-note">Use <strong>Manage</strong> to add and edit items, track maintenance, view announcements, and take stock counts.</p>
+            </section>
+            {% endif %}
+
+            {# ---- Admin / Superadmin: dashboard + approve & manage ---- #}
+            {% if user_role == "admin" or user_role == "superadmin" %}
+            <section class="onboarding-step" data-step="2">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M3 3h8v8H3Zm10 0h8v5h-8Zm0 7h8v10h-8ZM3 13h8v8H3Z"/></svg>
+                </span>
+                <h2>The Dashboard</h2>
+                <p class="section-note">The <strong>Dashboard</strong> gives the full picture: total stock, overdue returns, pending approvals, and maintenance. Use it to spot overdue gear at a glance.</p>
+            </section>
+            <section class="onboarding-step" data-step="3">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M9.55 17.6 4.4 12.45l1.4-1.4 3.75 3.75 8.25-8.25 1.4 1.4-9.65 9.65Z"/></svg>
+                </span>
+                <h2>Approve and manage</h2>
+                <p class="section-note">Approve member requests, hand over reservations, manage items, post announcements, and take stock from the <strong>Manage</strong> menu. You can also manage users from the admin tools.</p>
+            </section>
+            {% endif %}
+
+            {# ---- Your slip code (required for all roles) ---- #}
+            <section class="onboarding-step" data-step="9">
+                <span class="onboarding-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 3v2h16V7Zm0 4v2h10v-2Zm0 4v2h10v-2Z"/></svg>
+                </span>
+                <h2>Your slip code</h2>
+                <p class="section-note">Every request gets a slip code like <strong>KW-0042</strong>. Show it at the counter when you collect gear, and again when you bring it back. You can email or print the slip right from your Home page.</p>
+            </section>
+        </div>
+
+        <div class="onboarding-foot">
+            <button type="button" class="onboarding-skip" id="onboarding-skip">Skip for now</button>
+            <div class="onboarding-dots" id="onboarding-dots" aria-hidden="true"></div>
+            <div class="onboarding-nav">
+                <button type="button" class="button-link secondary" id="onboarding-back">Back</button>
+                <button type="button" class="button-link" id="onboarding-next">Next</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}

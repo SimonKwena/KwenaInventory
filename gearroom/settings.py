@@ -38,7 +38,7 @@ ALLOWED_HOSTS = [
     h.strip()
     for h in os.getenv(
         "DJANGO_ALLOWED_HOSTS",
-        "127.0.0.1,localhost"
+        "127.0.0.1,localhost,testserver"
     ).split(",")
     if h.strip()
 ]
@@ -230,6 +230,16 @@ if EMAIL_BACKEND:
         EMAIL_USE_TLS = True
 
 SITE_ID = 1
+
+# Web Push (VAPID)
+WEBPUSH_VAPID_PRIVATE_KEY = os.getenv("WEBPUSH_VAPID_PRIVATE_KEY", "")
+WEBPUSH_VAPID_PUBLIC_KEY = os.getenv("WEBPUSH_VAPID_PUBLIC_KEY", "")
+WEBPUSH_VAPID_ADMIN_EMAIL = os.getenv("WEBPUSH_VAPID_ADMIN_EMAIL", "noreply@kwena.local")
+
+# Reminder scheduler
+REMINDER_SCHEDULER_ENABLED = os.getenv("REMINDER_SCHEDULER_ENABLED", "0") == "1"
+REMINDER_SCHEDULER_INTERVAL_MINUTES = int(os.getenv("REMINDER_SCHEDULER_INTERVAL_MINUTES", "60"))
+
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
