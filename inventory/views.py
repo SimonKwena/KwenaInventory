@@ -44,6 +44,7 @@ from .models import (
     Transaction,
     WebPushDevice,
     display_name,
+    notify_request_received,
     notify_transaction_change,
 )
 from .services import (
@@ -1090,6 +1091,8 @@ def process_transaction(request):
         messages.error(request, error)
         return redirect("inventory:home")
 
+    notify_request_received(request_obj)
+
     if is_superadmin(request.user):
         ok, error = apply_request(request_obj, decided_by=request.user)
         if not ok:
@@ -1183,6 +1186,9 @@ def scan_item(request):
     if error:
         messages.error(request, error)
         return redirect("inventory:home")
+
+    notify_request_received(request_obj)
+
     if is_superadmin(request.user):
         ok, error = apply_request(request_obj, decided_by=request.user)
         if not ok:
