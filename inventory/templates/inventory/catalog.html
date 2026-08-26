@@ -3,15 +3,6 @@
 {% block title %}Browse items | Kwena Gear Room{% endblock %}
 
 {% block content %}
-    {% if messages %}
-    <div class="message-bar" id="catalog-messages" role="status" aria-live="polite">
-        {% for message in messages %}
-        <div class="message {{ message.tags }}">
-            <span class="message-text">{{ message }}</span>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
     <div class="catalog-layout">
         <aside class="catalog-sidebar" id="catalog-sidebar">
             <div class="catalog-sidebar-head">

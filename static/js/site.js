@@ -161,10 +161,9 @@ document.addEventListener('submit', function (event) {
             if (data && data.ok) {
                 updateCartBadge(data.counts);
                 flashButton(btn, 'Added');
-                const label = formData.get('action') === 'check_out' ? 'Check out' : 'Book ahead';
                 showToast(
-                    'Added to your ' + label + ' cart. Go to Home to fill in the form and submit.',
-                    { actionLabel: 'Go to Home', actionHref: appUrl(''), duration: 6000 }
+                    'Added to your cart.',
+                    { duration: 3000 }
                 );
             } else {
                 form.submit();
@@ -174,6 +173,55 @@ document.addEventListener('submit', function (event) {
             setSkeletonLoading(form, false);
             form.submit();
         });
+});
+
+/* Remove a single item from the cart via AJAX. */
+document.addEventListener('click', function (event) {
+    const btn = event.target.closest('.cart-remove-btn');
+    if (!btn) {
+        return;
+    }
+    event.preventDefault();
+    const form = new FormData();
+    form.append('csrfmiddlewaretoken', getCsrfToken());
+    form.append('action', btn.dataset.action || '');
+    form.append('item_id', btn.dataset.item || '');
+    fetch(appUrl('cart/remove/'), {
+        method: 'POST',
+        headers: { 'x-requested-with': 'XMLHttpRequest' },
+        body: form,
+        credentials: 'same-origin',
+    })
+    .then(function (resp) { return resp.json(); })
+    .then(function (data) {
+        if (data && data.ok) {
+            updateCartBadge(data.counts);
+            const row = btn.closest('.cart-item');
+            if (row) {
+                row.remove();
+            }
+            if (data.counts && data.counts.total === 0) {
+                const clearForm = document.createElement('form');
+                clearForm.method = 'POST';
+                clearForm.action = appUrl('cart/clear/');
+                clearForm.innerHTML = '<input type="hidden" name="csrfmiddlewaretoken" value="' + getCsrfToken() + '">';
+                document.body.appendChild(clearForm);
+                clearForm.submit();
+                return;
+            }
+            showToast(data.message || 'Item removed.', { duration: 3000 });
+        }
+    })
+    .catch(function () {
+        const fallback = document.createElement('form');
+        fallback.method = 'POST';
+        fallback.action = appUrl('cart/remove/');
+        fallback.innerHTML = '<input type="hidden" name="csrfmiddlewaretoken" value="' + getCsrfToken() + '">' +
+            '<input type="hidden" name="action" value="' + (btn.dataset.action || '') + '">' +
+            '<input type="hidden" name="item_id" value="' + (btn.dataset.item || '') + '">';
+        document.body.appendChild(fallback);
+        fallback.submit();
+    });
 });
 
 // Keep the hidden quantity inputs in each submit form in sync with the
@@ -2349,7 +2397,17 @@ function initOnboarding() {
             },
             body: body.toString(),
             credentials: 'same-origin',
-        }).catch(function () { /* best-effort; hide anyway */ });
+        }).catch(function () {
+            if (permanent) {
+                const fallback = document.createElement('form');
+                fallback.method = 'POST';
+                fallback.action = appUrl('onboarding/mark-seen/');
+                fallback.innerHTML = '<input type="hidden" name="csrfmiddlewaretoken" value="' + csrf + '">' +
+                    '<input type="hidden" name="permanent" value="1">';
+                document.body.appendChild(fallback);
+                fallback.submit();
+            }
+        });
         overlay.classList.remove('is-open');
         overlay.setAttribute('hidden', '');
     }
@@ -2369,10 +2427,13 @@ function initOnboarding() {
     if (closeBtn) {
         closeBtn.addEventListener('click', function () { dismiss(true); });
     }
+    if (skipBtn) {
+        skipBtn.addEventListener('click', function () { dismiss(false); });
+    }
 
     // Backdrop click (outside the card) and Escape dismiss permanently —
     // this popup is shown only on the user's very first login, so any
-    // dismissal marks it as seen forever.
+    // explicit dismissal marks it as seen forever.
     overlay.addEventListener('click', function (event) {
         if (event.target === overlay) {
             dismiss(true);
@@ -3154,39 +3215,6 @@ document.addEventListener('DOMContentLoaded', function () {
         updateBackToTop();
     }
 
-    (function initPushPermissionBar() {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-        const bar = document.getElementById('push-permission-bar');
-        if (!bar) return;
-        const enableBtn = document.getElementById('push-permission-enable');
-        const dismissBtn = document.getElementById('push-permission-dismiss');
-        if (!enableBtn || !dismissBtn) return;
-
-        if (sessionStorage.getItem('push_prompt_dismissed') === '1') {
-            bar.hidden = true;
-            return;
-        }
-
-        enableBtn.addEventListener('click', async function () {
-            bar.hidden = true;
-            const perm = await Notification.requestPermission();
-            if (perm === 'granted') {
-                for (const attempt of [1, 2, 3]) {
-                    const sub = await subscribeUser();
-                    if (sub) break;
-                    await new Promise(function (r) { setTimeout(r, 500); });
-                }
-            }
-        });
-
-        dismissBtn.addEventListener('click', function () {
-            bar.hidden = true;
-            sessionStorage.setItem('push_prompt_dismissed', '1');
-        });
-
-        bar.hidden = false;
-    })();
-
     if ('serviceWorker' in navigator && 'PushManager' in window) {
         const vapidPublicKey = (window.__WEBPUSH_VAPID_PUBLIC_KEY__ || '').trim();
         const csrfToken = getCsrfToken();
@@ -3204,7 +3232,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         async function ensureServiceWorker() {
-            const registration = await navigator.serviceWorker.register('/sw.js');
+            const registration = await navigator.serviceWorker.register('/inventory/sw.js');
             return registration;
         }
 
@@ -3247,6 +3275,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 body: body,
             });
+            const text = await resp.text();
+            console.log('subscribe response', resp.status, text);
             return resp.ok;
         }
 
@@ -3283,6 +3313,65 @@ document.addEventListener('DOMContentLoaded', function () {
             } catch (err) {
                 console.warn('Web push init skipped.', err);
             }
+            const prompt = document.getElementById('account-notify-prompt');
+            if (!prompt) return;
+            if (!('Notification' in window)) return;
+            if (Notification.permission === 'denied') {
+                prompt.hidden = true;
+                return;
+            }
+            const enableBtn = document.getElementById('account-push-enable');
+            const disableBtn = document.getElementById('account-push-dismiss');
+            if (!enableBtn || !disableBtn) return;
+
+            function setSubscribed(subscribed) {
+                if (subscribed) {
+                    enableBtn.hidden = true;
+                    disableBtn.hidden = false;
+                } else {
+                    enableBtn.hidden = false;
+                    disableBtn.hidden = true;
+                }
+            }
+
+            enableBtn.addEventListener('click', async function () {
+                enableBtn.disabled = true;
+                const perm = await Notification.requestPermission();
+                if (perm === 'granted') {
+                    for (const attempt of [1, 2, 3]) {
+                        const sub = await subscribeUser();
+                        if (sub) break;
+                        await new Promise(function (r) { setTimeout(r, 500); });
+                    }
+                    setSubscribed(!!currentSubscription);
+                }
+                enableBtn.disabled = false;
+            });
+
+            disableBtn.addEventListener('click', async function () {
+                if (!currentSubscription) return;
+                const endpoint = currentSubscription.endpoint;
+                const csrfToken = getCsrfToken();
+                try {
+                    const resp = await fetch(appUrl('webpush/unsubscribe/'), {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken,
+                        },
+                        body: JSON.stringify({ endpoint: endpoint }),
+                    });
+                    if (resp.ok) {
+                        await currentSubscription.unsubscribe();
+                        currentSubscription = null;
+                    }
+                } catch (err) {
+                    console.error('Web push unsubscribe failed:', err);
+                }
+                setSubscribed(false);
+            });
+
+            setSubscribed(!!currentSubscription);
         }
 
         initWebPush();

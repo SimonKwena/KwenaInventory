@@ -1,6 +1,7 @@
 import json
 import uuid
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -37,6 +38,7 @@ from .models import (
     Maintenance,
     Notification,
     Request,
+    RequestItem,
     StockTake,
     StockTakeItem,
     Transaction,
@@ -70,6 +72,7 @@ from .permissions import (
     ensure_profile,
     is_admin_or_above,
     is_staff_role,
+    is_superadmin,
     location_is_visible,
     role_of,
     user_has_workspace_access,
@@ -309,8 +312,8 @@ def cart_add(request):
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return JsonResponse({"ok": True, "counts": _cart_counts(request)})
 
-    messages.success(request, f"Added to your {action.replace('_', ' ')} cart.")
-    return redirect("inventory:cart")
+    messages.success(request, "Added to your cart.")
+    return redirect("inventory:catalog")
 
 
 @require_POST
@@ -328,8 +331,8 @@ def cart_remove(request):
         raw[action] = [e for e in raw[action] if e.get("item_id") != item_id]
         request.session[CART_SESSION_KEY] = raw
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        return JsonResponse({"ok": True, "counts": _cart_counts(request), "message": f"Added to your {action.replace('_', ' ')} cart."})
-    messages.success(request, f"Added to your {action.replace('_', ' ')} cart.")
+        return JsonResponse({"ok": True, "counts": _cart_counts(request), "message": f"Removed from your {action.replace('_', ' ')} cart."})
+    messages.success(request, f"Removed from your {action.replace('_', ' ')} cart.")
     return redirect("inventory:cart")
 
 
@@ -346,7 +349,8 @@ def cart_clear(request):
         raw = {}
     request.session[CART_SESSION_KEY] = raw
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        return JsonResponse({"ok": True, "counts": _cart_counts(request)})
+        return JsonResponse({"ok": True, "counts": _cart_counts(request), "message": "Cart cleared."})
+    messages.success(request, "Cart cleared.")
     return redirect("inventory:catalog")
 
 
@@ -690,7 +694,7 @@ def cart(request):
                 messages.error(request, error)
                 return redirect("inventory:cart")
 
-            if is_staff_role(request.user):
+            if is_superadmin(request.user):
                 ok, error = apply_request(request_obj, decided_by=request.user)
                 if not ok:
                     messages.error(request, error)
@@ -854,6 +858,7 @@ def account_page(request):
             "user_notifications": page_obj,
             "user_notifications_unread": user_notifications_unread,
             "overdue_items": overdue_items,
+            "webpush_vapid_public_key": getattr(settings, "WEBPUSH_VAPID_PUBLIC_KEY", ""),
         },
     )
 
@@ -931,7 +936,7 @@ def process_transaction(request):
     # hands the reservation over at pickup: the reserved stock becomes a live
     # check-out, no new request is created. Only staff may do this.
     hand_over_id = request.POST.get("hand_over_request_id", "").strip()
-    if hand_over_id and request.user.is_staff:
+    if hand_over_id and is_superadmin(request.user):
         from .models import Request
 
         try:
@@ -1028,7 +1033,7 @@ def process_transaction(request):
     # unambiguous, else leave it null so the form can ask.
     source_request = None
     submitted_source = request.POST.get("source_request_id", "").strip()
-    checked_in_by_admin = bool(request.POST.get("checked_in_by_admin")) and request.user.is_staff
+    checked_in_by_admin = bool(request.POST.get("checked_in_by_admin")) and is_superadmin(request.user)
     if transaction_type == "check_in" and item_entries:
         source_request = _resolve_checkin_source(
             request.user, item_entries[0]["item"], submitted_source,
@@ -1047,7 +1052,7 @@ def process_transaction(request):
     # and approve it immediately so the stock moves right away. The note records
     # that staff handled the return.
     if checked_in_by_admin and source_request is not None:
-        admin_tag = "Checked in by Admin" + ((": " + display_name(request.user)) if display_name(request.user) else "")
+        admin_tag = "Checked in by Superadmin" + ((": " + display_name(request.user)) if display_name(request.user) else "")
         return_obj, error = create_request(
             request.user,
             "check_in",
@@ -1085,7 +1090,7 @@ def process_transaction(request):
         messages.error(request, error)
         return redirect("inventory:home")
 
-    if is_staff_role(request.user):
+    if is_superadmin(request.user):
         ok, error = apply_request(request_obj, decided_by=request.user)
         if not ok:
             messages.error(request, error)
@@ -1178,7 +1183,7 @@ def scan_item(request):
     if error:
         messages.error(request, error)
         return redirect("inventory:home")
-    if is_staff_role(request.user):
+    if is_superadmin(request.user):
         ok, error = apply_request(request_obj, decided_by=request.user)
         if not ok:
             messages.error(request, error)
@@ -1196,11 +1201,7 @@ def scan_item(request):
     return redirect("inventory:teacher_home" if role_of(request.user) == ROLE_TEACHER else "inventory:home")
 
 
-@user_passes_test(lambda user: user.is_staff)
-
-
-@user_passes_test(lambda user: user.is_staff)
-@user_passes_test(lambda user: user.is_staff)
+@user_passes_test(is_superadmin)
 def return_by_code(request):
     """Desk return flow keyed by a request's slip code (e.g. KW-0042).
 
@@ -1360,31 +1361,67 @@ def dashboard(request):
     conditions = ConditionOption.objects.filter(is_active=True).order_by("name")
     now = timezone.now()
     pending_returns = []
+
+    live_txns = []
     for item in Item.objects.filter(quantity_out__gt=0).select_related("location"):
-        # Emit one line per approved check-out that is still outstanding, so
-        # multiple check-outs of the same item with different deadlines (e.g. one
-        # overdue, one due later) appear separately. Returns (approved check-ins)
-        # consume the oldest check-outs first (FIFO), so the live check-outs are
-        # the most recent ones once the returned quantity is accounted for.
         live_out = item.quantity_out
-        live_txns = []
         for txn in item.transactions.filter(
             transaction_type="check_out", approval_status="approved", voided="none"
         ).select_related("user").order_by("-created_at"):
             if live_out <= 0:
                 break
             live_out -= txn.quantity
-            live_txns.append(txn)
-        for txn in live_txns:
-            if txn.expected_return:
-                pending_returns.append(
-                    {
-                        "item": item,
-                        "member": txn.user.get_full_name() or txn.user.username if txn.user else "",
-                        "expected_return": txn.expected_return,
-                        "overdue": txn.expected_return < now,
+            live_txns.append((item, txn))
+
+    request_items = RequestItem.objects.filter(
+        transaction__in=[txn for _, txn in live_txns]
+    ).select_related("request", "transaction")
+    txn_to_request = {ri.transaction_id: ri.request for ri in request_items}
+
+    request_groups = {}
+    unlinked = []
+    for item, txn in live_txns:
+        if txn.expected_return:
+            req = txn_to_request.get(txn.pk)
+            if req:
+                group = request_groups.get(req.pk)
+                if group is None:
+                    group = {
+                        "request": req,
+                        "items": set(),
+                        "overdue": False,
+                        "expected_return": None,
                     }
-                )
+                    request_groups[req.pk] = group
+                group["items"].add(item.name)
+                if txn.expected_return < now:
+                    group["overdue"] = True
+                if group["expected_return"] is None or txn.expected_return < group["expected_return"]:
+                    group["expected_return"] = txn.expected_return
+            else:
+                unlinked.append((item, txn))
+
+    for group in request_groups.values():
+        pending_returns.append(
+            {
+                "request": group["request"],
+                "member": group["request"].user.get_full_name() or group["request"].user.username,
+                "items": ", ".join(sorted(group["items"])),
+                "expected_return": group["expected_return"],
+                "overdue": group["overdue"],
+            }
+        )
+
+    for item, txn in unlinked:
+        pending_returns.append(
+            {
+                "item": item,
+                "member": txn.user.get_full_name() or txn.user.username if txn.user else "",
+                "expected_return": txn.expected_return,
+                "overdue": txn.expected_return < now,
+            }
+        )
+
     pending_returns.sort(key=lambda entry: entry["expected_return"])
     announcements = Announcement.objects.all().order_by("-created_at")
     maintenance_count = Maintenance.objects.filter(completed_at__isnull=True).count()
@@ -1397,6 +1434,11 @@ def dashboard(request):
     borrowed_items = get_user_borrowed_items(request.user)
     has_active_gear = bool(borrowed_items)
     active_loans = get_user_active_loans(request.user)
+    recent_transactions = list(
+        Transaction.objects.filter(voided="none")
+        .select_related("item", "user", "location")
+        .order_by("-created_at")[:15]
+    )
     return render(
         request,
         "inventory/dashboard.html",
@@ -1420,8 +1462,8 @@ def dashboard(request):
             "can_check_out": can_check_out(request.user),
             "can_check_in": can_check_in(request.user, has_active_gear),
             "active_loans": active_loans,
-            "show_quick_action": is_admin_or_above(request.user),
             "last_updated": timezone.now(),
+            "recent_transactions": recent_transactions,
         },
     )
 
@@ -1638,7 +1680,7 @@ def _redirect_after_request_action(obj):
 
 
 @require_POST
-@user_passes_test(lambda user: user.is_staff)
+@user_passes_test(is_superadmin)
 def request_approve(request, pk):
     obj, is_request = _resolve_request(pk)
     if obj is None or obj.approval_status != "pending":
@@ -1655,7 +1697,7 @@ def request_approve(request, pk):
 
 
 @require_POST
-@user_passes_test(lambda user: user.is_staff)
+@user_passes_test(is_superadmin)
 def request_reject(request, pk):
     obj, is_request = _resolve_request(pk)
     if obj is None or obj.approval_status != "pending":
@@ -1672,7 +1714,7 @@ def request_reject(request, pk):
 
 
 @require_POST
-@user_passes_test(lambda user: user.is_staff)
+@user_passes_test(is_superadmin)
 def request_hand_over(request, pk):
     """Hand an approved book-ahead reservation over to the member at pickup.
 
@@ -1799,7 +1841,7 @@ def request_slip(request, code):
 
 
 @require_POST
-@user_passes_test(lambda user: user.is_staff)
+@user_passes_test(is_superadmin)
 def request_void(request, pk):
     """Void a single entry chosen from a slip's history: either the loan itself
     (reversing only the loan's own stock) or one check-in return (reversing only
@@ -1861,7 +1903,7 @@ def _loan_for_checkin(txn):
 
 
 @require_POST
-@user_passes_test(lambda user: user.is_staff)
+@user_passes_test(is_superadmin)
 def transaction_void(request, pk):
     """Void a single desk return: a check-in transaction filed straight against a
     loan via return-by-code (it has no return Request to void). Its units go back
@@ -1943,7 +1985,7 @@ def request_lookup_code(request):
 
 
 @login_required
-@user_passes_test(lambda user: user.is_staff)
+@user_passes_test(is_superadmin)
 def request_edit(request, pk):
     """Admin edits a request before deciding, or a book-ahead reservation after
     approval (it holds no stock). Approved check-outs/ins already moved stock, so
@@ -2155,12 +2197,7 @@ def item_list(request):
     total_items = items.count()
     total_available = sum(item.quantity_available for item in items)
     total_out = sum(item.quantity_out for item in items)
-    maintenance_open = (
-        Maintenance.objects.filter(completed_at__isnull=True)
-        .select_related("item", "item__location", "reported_by")
-        .order_by("started_at")
-    )
-    maintenance_count = maintenance_open.count()
+    maintenance_count = Maintenance.objects.filter(completed_at__isnull=True).count()
     locations = Location.objects.filter(is_active=True)
     categories = list(
         Item.objects.exclude(category__isnull=True)
@@ -2179,14 +2216,13 @@ def item_list(request):
             "total_items": total_items,
             "total_available": total_available,
             "total_out": total_out,
-            "maintenance_open": maintenance_open,
             "maintenance_count": maintenance_count,
             "last_updated": timezone.now(),
         },
     )
 
 
-@user_passes_test(lambda user: user.is_staff)
+@user_passes_test(is_superadmin)
 def item_create(request):
     if request.method == "POST":
         form = ItemForm(request.POST, request.FILES, user=request.user)
@@ -2221,7 +2257,7 @@ def item_create(request):
     return render(request, "inventory/item_form.html", {"form": form, "is_edit": False})
 
 
-@user_passes_test(lambda user: user.is_staff)
+@user_passes_test(is_superadmin)
 def item_edit(request, pk):
     item = get_object_or_404(Item, pk=pk)
     if request.method == "POST":
@@ -2616,7 +2652,7 @@ def stock_take_list(request):
     )
 
 
-@user_passes_test(lambda user: user.is_staff)
+@user_passes_test(is_superadmin)
 def stock_take_create(request):
     """Create a new stock take in two steps:
     Step 1: Choose a location.

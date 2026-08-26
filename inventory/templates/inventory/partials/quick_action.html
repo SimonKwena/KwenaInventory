@@ -1,7 +1,7 @@
 {% if can_book_ahead or can_check_out or can_check_in %}
     <div class="card">
         <h3>Quick action</h3>
-        <p class="section-note">Pick an action, then scan a QR/SKU or choose items. Every request needs an admin to approve it before any stock moves &mdash; book aheads are held as reservations until pickup.</p>
+        <p class="section-note">Pick an action, then scan a QR or choose items. Every request needs an admin to approve it before any stock moves &mdash; book aheads are held as reservations until pickup.</p>
         <form id="home-action-form" method="post" action="{% url 'inventory:process_transaction' %}"{% if is_admin_quick_action %} data-admin-quick-action="true"{% endif %}>
             {% csrf_token %}
             <div class="form-row" data-region="home-qa-actions">

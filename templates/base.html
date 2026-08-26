@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/site.css' %}?v=42">
+    <link rel="stylesheet" href="{% static 'css/site.css' %}?v=44">
     <script defer src="{% static 'js/vendor/jsQR.min.js' %}?v=1"></script>
     {% if request.user.is_authenticated %}
     <script>
@@ -38,9 +38,10 @@
                                 <div class="nav-links">
                                     {% if request.user.is_superuser or user_role == "admin" or user_role == "superadmin" %}
                                     <a class="nav-link {% if '/inventory/dashboard/' in request.path %}is-active{% endif %}" href="{% url 'inventory:dashboard' %}">Dashboard</a>
+                                    <a class="nav-link {% if '/inventory/staff/' in request.path %}is-active{% endif %}" href="{% url 'inventory:staff_home' %}">Quick action</a>
                                     {% endif %}
                                     {% if user_role == "staff" %}
-                                    <a class="nav-link {% if '/inventory/staff/' in request.path %}is-active{% endif %}" href="{% url 'inventory:staff_home' %}">Staff desk</a>
+                                    <a class="nav-link {% if '/inventory/staff/' in request.path %}is-active{% endif %}" href="{% url 'inventory:staff_home' %}">Quick action</a>
                                     {% endif %}
                                     <a class="nav-link {% if '/inventory/catalog' in request.path %}is-active{% endif %}" href="{% url 'inventory:catalog' %}">Browse Items</a>
                                     <div class="nav-dropdown" id="manage-dropdown">
@@ -139,14 +140,6 @@
                 <button type="button" class="message-close" aria-label="Dismiss message">&times;</button>
             </div>
             {% endfor %}
-        </div>
-        {% endif %}
-        {% if request.user.is_authenticated and webpush_vapid_public_key %}
-        <div class="message-bar" id="push-permission-bar" role="status" aria-live="polite" hidden>
-            <span class="message-icon" aria-hidden="true">&#x1F4F2;</span>
-            <span class="message-text">Enable browser notifications to get alerts about your gear?</span>
-            <button type="button" class="button-link" id="push-permission-enable">Enable</button>
-            <button type="button" class="message-close" id="push-permission-dismiss" aria-label="Dismiss">&times;</button>
         </div>
         {% endif %}
         <main id="main">

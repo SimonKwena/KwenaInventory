@@ -7,49 +7,84 @@
         <div class="grid grid-2">
             <div class="card">
                 <h3>Inventory summary</h3>
-                <p class="section-note">A full snapshot of stock, movement, and gear status.</p>
+                <p class="section-note">A full snapshot of stock, movement, and gear status. Click any stat to jump to the relevant page.</p>
                 <div class="stat-grid" data-region="inventory-stats">
-                    <div class="stat"><div class="stat-value">{{ total_items }}</div><div class="stat-label">Total items</div></div>
-                    <div class="stat"><div class="stat-value">{{ total_available }}</div><div class="stat-label">Available</div></div>
-                    <div class="stat"><div class="stat-value">{{ total_out }}</div><div class="stat-label">Checked out</div></div>
-                    <div class="stat"><div class="stat-value">{{ maintenance_count }}</div><div class="stat-label">In maintenance</div></div>
-                    <div class="stat"><div class="stat-value {% if pending_request_count %}stat-danger{% endif %}">{{ pending_request_count }}</div><div class="stat-label">Pending approvals</div></div>
-                    <div class="stat"><div class="stat-value">{{ pending_count }}</div><div class="stat-label">Promised returns</div></div>
-                    <div class="stat"><div class="stat-value {% if overdue_count %}stat-danger{% endif %}">{{ overdue_count }}</div><div class="stat-label">Overdue</div></div>
-                    <div class="stat"><div class="stat-value">{{ location_count }}</div><div class="stat-label">Locations</div></div>
-                    <div class="stat"><div class="stat-value">{{ announcement_count }}</div><div class="stat-label">Updates posted</div></div>
+                    <a class="stat text-decoration-none" href="{% url 'inventory:item_list' %}">
+                        <div class="stat-value">{{ total_items }}</div>
+                        <div class="stat-label">Total items</div>
+                    </a>
+                    <a class="stat text-decoration-none" href="{% url 'inventory:item_list' %}">
+                        <div class="stat-value">{{ total_available }}</div>
+                        <div class="stat-label">Available</div>
+                    </a>
+                    <a class="stat text-decoration-none" href="{% url 'inventory:requests' %}">
+                        <div class="stat-value">{{ total_out }}</div>
+                        <div class="stat-label">Checked out</div>
+                    </a>
+                    <a class="stat text-decoration-none" href="{% url 'inventory:maintenance' %}">
+                        <div class="stat-value">{{ maintenance_count }}</div>
+                        <div class="stat-label">In maintenance</div>
+                    </a>
+                    <a class="stat text-decoration-none" href="{% url 'inventory:requests' %}">
+                        <div class="stat-value {% if pending_request_count %}stat-danger{% endif %}">{{ pending_request_count }}</div>
+                        <div class="stat-label">Pending approvals</div>
+                    </a>
+                    <a class="stat text-decoration-none" href="{% url 'inventory:requests' %}">
+                        <div class="stat-value">{{ pending_count }}</div>
+                        <div class="stat-label">Promised returns</div>
+                    </a>
+                    <a class="stat text-decoration-none" href="{% url 'inventory:requests' %}">
+                        <div class="stat-value {% if overdue_count %}stat-danger{% endif %}">{{ overdue_count }}</div>
+                        <div class="stat-label">Overdue</div>
+                    </a>
+                    <a class="stat text-decoration-none" href="{% url 'inventory:item_list' %}">
+                        <div class="stat-value">{{ location_count }}</div>
+                        <div class="stat-label">Locations</div>
+                    </a>
+                    <a class="stat text-decoration-none" href="{% url 'inventory:announcements' %}">
+                        <div class="stat-value">{{ announcement_count }}</div>
+                        <div class="stat-label">Updates posted</div>
+                    </a>
                 </div>
                 <p class="section-note" style="margin-top:10px;">Updated {{ last_updated|date:"d M Y, H:i" }}</p>
             </div>
             <div class="card dashboard-side">
-                <h3>Items currently out &amp; promised returns</h3>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3 class="card-title mb-0">Items currently out &amp; promised returns</h3>
+                    <a href="{% url 'inventory:requests' %}" class="btn btn-sm btn-outline-primary">View all requests</a>
+                </div>
                 <div class="scroll-area table-wrapper" data-region="pending-returns" aria-live="polite">
-                    <table>
+                    <table class="table table-hover mb-0">
                         <thead>
-                            <tr><th>Item</th><th>Member</th><th>Location</th><th>Out</th><th>Expected return</th><th>Status</th></tr>
+                            <tr><th>Slip</th><th>Member</th><th>Items</th><th>Expected return</th><th>Status</th></tr>
                         </thead>
                         <tbody>
                             {% for entry in pending_returns %}
-                                <tr>
-                                    <td>{{ entry.item.name }}</td>
-                                    <td>{{ entry.member }}</td>
-                                    <td>{{ entry.item.location.name }}</td>
-                                    <td>{{ entry.item.quantity_out }}</td>
-                                    <td>{{ entry.expected_return }}</td>
-                                    <td>{% if entry.overdue %}<span class="pill pill-danger">Overdue</span>{% else %}<span class="pill pill-neutral">Pending</span>{% endif %}</td>
-                                </tr>
+                                {% if entry.request %}
+                                    <tr>
+                                        <td>{{ entry.request.reference_code }}</td>
+                                        <td>{{ entry.member }}</td>
+                                        <td>{{ entry.items }}</td>
+                                        <td>{{ entry.expected_return|date:"d M Y, H:i" }}</td>
+                                        <td>{% if entry.overdue %}<span class="pill pill-danger">Overdue</span>{% else %}<span class="pill pill-neutral">Pending</span>{% endif %}</td>
+                                    </tr>
+                                {% else %}
+                                    <tr>
+                                        <td>{{ entry.item.name }}</td>
+                                        <td>{{ entry.member }}</td>
+                                        <td>{{ entry.item.location.name }}</td>
+                                        <td>{{ entry.expected_return|date:"d M Y, H:i" }}</td>
+                                        <td>{% if entry.overdue %}<span class="pill pill-danger">Overdue</span>{% else %}<span class="pill pill-neutral">Pending</span>{% endif %}</td>
+                                    </tr>
+                                {% endif %}
                             {% empty %}
-                                <tr><td colspan="6">No items currently checked out.</td></tr>
+                                <tr><td colspan="5">No items currently checked out.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-
-        {% if show_quick_action %}
-            {% include "inventory/partials/quick_action.html" with is_admin_quick_action=True show_slip_input=True %}
-        {% endif %}
     </div>
     {% include "inventory/partials/slip_modal.html" %}
 {% endblock %}

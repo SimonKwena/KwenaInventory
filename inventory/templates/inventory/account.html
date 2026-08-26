@@ -77,6 +77,23 @@
             <h3 id="notifications">Notifications</h3>
             <p class="section-note">Updates about your reservations, gear, and the gear room.</p>
 
+            {% if webpush_vapid_public_key %}
+            <div class="account-notify-prompt" id="account-notify-prompt">
+                <div class="account-notify-inner">
+                    <div class="account-notify-body">
+                        <span class="account-notify-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6-2-2v-4a5 5 0 0 0-4-4.9V4a1 1 0 1 0-2 0v1.1A5 5 0 0 0 7 10v4l-2 2v1h14v-1l-2-2Z"/></svg>
+                        </span>
+                        <span class="account-notify-text">Get browser alerts about your gear?</span>
+                    </div>
+                    <div class="account-notify-actions">
+                        <button type="button" class="button-link" id="account-push-enable">Enable</button>
+                        <button type="button" class="button-link ghost" id="account-push-dismiss" hidden>Disable</button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             {% with unread_count=user_notifications_unread|default:0 %}
             <div class="collapsible" data-collapsible data-open-when-unread data-region="account-notifications">
                 <button type="button" class="collapsible-toggle" aria-expanded="{% if unread_count %}true{% else %}false{% endif %}" aria-controls="notif-for-you">

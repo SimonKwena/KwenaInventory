@@ -51,7 +51,7 @@
                                 </td>
                                 <td class="col-actions">
                                     <div class="actions actions-inline">
-                                        <a class="button-link secondary btn-sm" href="{% url 'inventory:request_edit' req.pk %}">Edit</a>
+                                        {% if user_role == "superadmin" %}
                                         <form method="post" action="{% url 'inventory:request_approve' req.pk %}" data-live-submit>
                                             {% csrf_token %}
                                             <button type="submit" class="button-link btn-sm">Approve</button>
@@ -60,6 +60,8 @@
                                             {% csrf_token %}
                                             <button type="submit" class="button-link secondary btn-sm">Reject</button>
                                         </form>
+                                        {% endif %}
+                                        <a class="button-link secondary btn-sm" href="{% url 'inventory:request_edit' req.pk %}">Edit</a>
                                     </div>
                                 </td>
                             </tr>

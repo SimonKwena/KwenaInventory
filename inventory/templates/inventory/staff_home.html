@@ -1,7 +1,8 @@
 {% extends 'base.html' %}
 
-{% block title %}Staff Desk | Kwena Gear Room{% endblock %}
+{% block title %}Quick action | Kwena Gear Room{% endblock %}
 
 {% block content %}
     {% include "inventory/partials/quick_action.html" with is_admin_quick_action=True show_slip_input=True %}
+    {% include "inventory/partials/slip_modal.html" %}
 {% endblock %}

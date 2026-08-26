@@ -7,7 +7,7 @@
     <div class="card">
         <div class="cart-panel-head">
             <h3>Your cart</h3>
-            <form method="post" action="{% url 'inventory:cart_clear' %}" class="cart-clear-form">
+            <form method="post" action="{% url 'inventory:cart_clear' %}">
                 {% csrf_token %}
                 <button type="submit" class="button-link secondary btn-sm">Clear cart</button>
             </form>
@@ -19,47 +19,30 @@
         {% endif %}
         <form method="post" action="{% url 'inventory:cart' %}" class="cart-submit-form">
             {% csrf_token %}
-            <div class="cart-table-wrap">
-                <table class="cart-table">
-                    <thead>
-                        <tr>
-                            <th>Item</th>
-                            <th>Action</th>
-                            <th class="col-qty">Qty</th>
-                            <th>Location</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for group in cart_items %}
-                            {% for entry in group.entries %}
-                                <tr class="cart-item" data-action="{{ group.action }}" data-item="{{ entry.item_id }}">
-                                    <td data-label="Item">{{ entry.name }}</td>
-                                    <td data-label="Action">
-                                        <select name="action_{{ entry.item_id }}" class="select-input cart-action-select">
-                                            <option value="book_ahead" {% if group.action == 'book_ahead' %}selected{% endif %}>Book ahead</option>
-                                            {% if can_check_out %}
-                                            <option value="check_out" {% if group.action == 'check_out' %}selected{% endif %}>Check out</option>
-                                            {% endif %}
-                                        </select>
-                                    </td>
-                                    <td data-label="Qty" class="col-qty">
-                                        <input type="number" class="cart-home-qty" name="qty_{{ entry.item_id }}" value="{{ entry.quantity }}" min="1" max="{{ entry.quantity_available|default:1 }}" style="width:64px;padding:8px 10px;">
-                                    </td>
-                                    <td data-label="Location">{{ entry.location }}</td>
-                                    <td>
-                                        <form method="post" action="{% url 'inventory:cart_remove' %}" class="cart-remove-form">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="action" value="{{ group.action }}">
-                                            <input type="hidden" name="item_id" value="{{ entry.item_id }}">
-                                            <button type="submit" class="button-link clear-button" aria-label="Remove {{ entry.name }}">Remove</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div class="cart-items-list">
+                {% for group in cart_items %}
+                    {% for entry in group.entries %}
+                    <div class="cart-item" data-action="{{ group.action }}" data-item="{{ entry.item_id }}">
+                        <div class="cart-item-main">
+                            <span class="cart-item-name">{{ entry.name }}</span>
+                            <span class="cart-item-location">{{ entry.location }}</span>
+                        </div>
+                        <div class="cart-item-controls">
+                            <select name="action_{{ entry.item_id }}" class="select-input cart-action-select">
+                                <option value="book_ahead" {% if group.action == 'book_ahead' %}selected{% endif %}>Book ahead</option>
+                                {% if can_check_out %}
+                                <option value="check_out" {% if group.action == 'check_out' %}selected{% endif %}>Check out</option>
+                                {% endif %}
+                            </select>
+                            <input type="number" class="cart-home-qty" name="qty_{{ entry.item_id }}" value="{{ entry.quantity }}" min="1" max="{{ entry.quantity_available|default:1 }}">
+                            <button type="button" class="button-link clear-button cart-remove-btn" data-action="{{ group.action }}" data-item="{{ entry.item_id }}" aria-label="Remove {{ entry.name }}">Remove</button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+            <div class="cart-add-item-row">
+                <a class="button-link secondary" href="{% url 'inventory:catalog' %}">Add item</a>
             </div>
             <div class="form-row form-row-half cart-bookahead-fields">
                 <div id="cart-taken-at-field">
@@ -77,7 +60,6 @@
             </div>
             <div class="cart-actions">
                 <button type="submit" class="button-link">Submit cart</button>
-                <a class="button-link secondary" href="{% url 'inventory:catalog' %}">Add item</a>
             </div>
         </form>
     </div>

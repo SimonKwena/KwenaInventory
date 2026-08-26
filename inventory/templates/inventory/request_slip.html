@@ -141,7 +141,7 @@
                 <span class="timeline-meta timeline-meta-sub">
                     Voided{% if ret.voided_at %} &middot; {{ ret.voided_at|date:"D d M Y, H:i" }}{% endif %}{% if ret.voided_by_name %} &middot; {{ ret.voided_by_name }}{{ ret.voided_by|admin_suffix }}{% endif %}{% if ret.voided_reason %} &middot; {{ ret.voided_reason }}{% endif %}
                 </span>
-                {% else %}
+                {% elif user_role == "superadmin" %}
                 <form method="post" action="{% url 'inventory:request_void' ret.pk %}" class="void-form void-form-inline">
                     {% csrf_token %}
                     <input type="text" name="reason" class="void-reason" placeholder="Reason (optional)">
@@ -166,7 +166,7 @@
                 <span class="timeline-meta timeline-meta-sub">
                     Voided{% if dret.voided_at %} &middot; {{ dret.voided_at|date:"D d M Y, H:i" }}{% endif %}{% if dret.voided_by_name %} &middot; {{ dret.voided_by_name }}{{ dret.voided_by|admin_suffix }}{% endif %}{% if dret.voided_reason %} &middot; {{ dret.voided_reason }}{% endif %}
                 </span>
-                {% else %}
+                {% elif user_role == "superadmin" %}
                 <form method="post" action="{% url 'inventory:transaction_void' dret.pk %}" class="void-form void-form-inline">
                     {% csrf_token %}
                     <input type="text" name="reason" class="void-reason" placeholder="Reason (optional)">
@@ -211,7 +211,7 @@
             <p class="message error">This loan has been voided. Voiding cannot be undone, but you can still view the history above and void any returns individually.</p>
         {% else %}
             <div class="actions actions-inline wrap">
-                {% if slip.approval_status == "pending" %}
+                {% if slip.approval_status == "pending" and user_role == "superadmin" %}
                     <form method="post" action="{% url 'inventory:request_approve' slip.pk %}">
                         {% csrf_token %}
                         <button type="submit" class="button-link btn-sm">Approve</button>
@@ -220,7 +220,7 @@
                         {% csrf_token %}
                         <button type="submit" class="button-link secondary btn-sm">Reject</button>
                     </form>
-                {% elif slip.approval_status == "approved" and slip.transaction_type == "book_ahead" and not slip.is_handed_over %}
+                {% elif slip.approval_status == "approved" and slip.transaction_type == "book_ahead" and not slip.is_handed_over and user_role == "superadmin" %}
                     <form method="post" action="{% url 'inventory:request_hand_over' slip.pk %}">
                         {% csrf_token %}
                         <button type="submit" class="button-link btn-sm">Hand over</button>
@@ -237,6 +237,7 @@
                 {% endif %}
             </div>
 
+            {% if user_role == "superadmin" %}
             <form method="post" action="{% url 'inventory:request_void' slip.pk %}" class="void-form">
                 {% csrf_token %}
                 <div class="field-input-group">
@@ -250,6 +251,7 @@
                     </button>
                 </div>
             </form>
+            {% endif %}
         {% endif %}
     </div>
 

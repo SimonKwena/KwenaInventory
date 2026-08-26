@@ -92,6 +92,9 @@ ENV/
 .spyderproject
 .spyproject
 
+# database
+.sqlite3
+
 # Rope project settings
 .ropeproject
 
