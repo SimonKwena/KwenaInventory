@@ -3215,166 +3215,84 @@ document.addEventListener('DOMContentLoaded', function () {
         updateBackToTop();
     }
 
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-        const vapidPublicKey = (window.__WEBPUSH_VAPID_PUBLIC_KEY__ || '').trim();
-        const csrfToken = getCsrfToken();
-        let currentSubscription = null;
+    function initOneSignal() {
+        const appId = (window.__ONESIGNAL_APP_ID__ || '').trim();
+        if (!appId) return;
+        const prompt = document.getElementById('account-notify-prompt');
+        if (!prompt) return;
+        const enableBtn = document.getElementById('account-push-enable');
+        const disableBtn = document.getElementById('account-push-dismiss');
+        if (!enableBtn || !disableBtn) return;
 
-        function urlBase64ToUint8Array(base64String) {
-            const padding = '='.repeat((4 - base64String.length % 4) % 4);
-            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-            for (let i = 0; i < rawData.length; ++i) {
-                outputArray[i] = rawData.charCodeAt(i);
+        function setSubscribed(subscribed) {
+            if (subscribed) {
+                enableBtn.hidden = true;
+                disableBtn.hidden = false;
+            } else {
+                enableBtn.hidden = false;
+                disableBtn.hidden = true;
             }
-            return outputArray;
         }
 
-        async function ensureServiceWorker() {
-            const registration = await navigator.serviceWorker.register('/inventory/sw.js');
-            return registration;
-        }
-
-        async function subscribeUser() {
-            if (!vapidPublicKey) {
-                console.warn('Web push VAPID public key is not set.');
+        async function ensureOneSignal() {
+            if (typeof OneSignal === 'undefined') {
                 return null;
             }
             try {
-                const registration = await ensureServiceWorker();
-                const subscription = await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-                });
-                await saveSubscription(subscription);
-                currentSubscription = subscription;
-                return subscription;
+                await OneSignal.Default.pushPermission.request();
             } catch (err) {
-                console.error('Web push subscription failed:', err);
-                return null;
+                console.error('OneSignal permission request failed:', err);
             }
+            return OneSignal.Default;
         }
 
-        async function saveSubscription(subscription) {
-            const endpoint = subscription.endpoint;
-            const auth = subscription.getKey('auth');
-            const p256dh = subscription.getKey('p256dh');
-            const body = JSON.stringify({
-                endpoint: endpoint,
-                keys: {
-                    auth: btoa(String.fromCharCode.apply(null, new Uint8Array(auth))),
-                    p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(p256dh))),
-                },
-            });
-            const resp = await fetch(appUrl('webpush/subscribe/'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken,
-                },
-                body: body,
-            });
-            const text = await resp.text();
-            console.log('subscribe response', resp.status, text);
-            return resp.ok;
-        }
+        enableBtn.addEventListener('click', async function () {
+            enableBtn.disabled = true;
+            const os = await ensureOneSignal();
+            if (os) {
+                try {
+                    await os.registerForPushNotifications();
+                } catch (err) {
+                    console.error('OneSignal register failed:', err);
+                }
+            }
+            enableBtn.disabled = false;
+        });
 
-        async function unsubscribeUser() {
-            if (!currentSubscription) {
-                const registration = await ensureServiceWorker();
-                currentSubscription = await registration.pushManager.getSubscription();
-            }
-            if (!currentSubscription) {
-                return true;
-            }
-            const endpoint = currentSubscription.endpoint;
-            const resp = await fetch(appUrl('webpush/unsubscribe/'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken,
-                },
-                body: JSON.stringify({ endpoint: endpoint }),
-            });
-            const ok = resp.ok;
-            if (ok) {
-                await currentSubscription.unsubscribe();
-                currentSubscription = null;
-            }
-            return ok;
-        }
-
-        async function initWebPush() {
+        disableBtn.addEventListener('click', async function () {
+            if (typeof OneSignal === 'undefined') return;
             try {
-                const registration = await ensureServiceWorker();
-                const subscription = await registration.pushManager.getSubscription();
-                currentSubscription = subscription || null;
+                await OneSignal.Default.logout();
             } catch (err) {
-                console.warn('Web push init skipped.', err);
+                console.error('OneSignal disable failed:', err);
             }
-            const prompt = document.getElementById('account-notify-prompt');
-            if (!prompt) return;
-            if (!('Notification' in window)) return;
-            if (Notification.permission === 'denied') {
-                prompt.hidden = true;
-                return;
-            }
-            const enableBtn = document.getElementById('account-push-enable');
-            const disableBtn = document.getElementById('account-push-dismiss');
-            if (!enableBtn || !disableBtn) return;
+            setSubscribed(false);
+        });
 
-            function setSubscribed(subscribed) {
-                if (subscribed) {
-                    enableBtn.hidden = true;
-                    disableBtn.hidden = false;
-                } else {
-                    enableBtn.hidden = false;
-                    disableBtn.hidden = true;
-                }
-            }
-
-            enableBtn.addEventListener('click', async function () {
-                enableBtn.disabled = true;
-                const perm = await Notification.requestPermission();
-                if (perm === 'granted') {
-                    for (const attempt of [1, 2, 3]) {
-                        const sub = await subscribeUser();
-                        if (sub) break;
-                        await new Promise(function (r) { setTimeout(r, 500); });
-                    }
-                    setSubscribed(!!currentSubscription);
-                }
-                enableBtn.disabled = false;
-            });
-
-            disableBtn.addEventListener('click', async function () {
-                if (!currentSubscription) return;
-                const endpoint = currentSubscription.endpoint;
+        if (typeof OneSignal !== 'undefined') {
+            OneSignal.Default.subscribeNotificationChange(async function (state) {
+                const subscribed = state && state.isSubscribed;
+                setSubscribed(subscribed);
+                if (!subscribed) return;
+                const playerId = await OneSignal.Default.getPlayerId();
+                if (!playerId) return;
                 const csrfToken = getCsrfToken();
                 try {
-                    const resp = await fetch(appUrl('webpush/unsubscribe/'), {
+                    await fetch(appUrl('onesignal/subscribe/'), {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'X-CSRFToken': csrfToken,
                         },
-                        body: JSON.stringify({ endpoint: endpoint }),
+                        body: JSON.stringify({ player_id: playerId }),
                     });
-                    if (resp.ok) {
-                        await currentSubscription.unsubscribe();
-                        currentSubscription = null;
-                    }
                 } catch (err) {
-                    console.error('Web push unsubscribe failed:', err);
+                    console.error('OneSignal subscribe failed:', err);
                 }
-                setSubscribed(false);
             });
-
-            setSubscribed(!!currentSubscription);
         }
-
-        initWebPush();
     }
+
+    initOneSignal();
 })();
 

@@ -60,9 +60,7 @@ urlpatterns = [
     path("stock-takes/", views.stock_take_list, name="stock_take_list"),
     path("stock-takes/new/", views.stock_take_create, name="stock_take_create"),
     path("stock-takes/<int:pk>/", views.stock_take_detail, name="stock_take_detail"),
-    path("webpush/subscribe/", views.webpush_subscribe, name="webpush_subscribe"),
-    path("webpush/unsubscribe/", views.webpush_unsubscribe, name="webpush_unsubscribe"),
-    path("webpush/devices/", views.webpush_devices, name="webpush_devices"),
-    path("webpush/send-test/", views.webpush_send_test, name="webpush_send_test"),
-    path("sw.js", views.service_worker, name="service_worker"),
+    path("onesignal/subscribe/", views.onesignal_subscribe, name="onesignal_subscribe"),
+    path("onesignal/unsubscribe/", views.onesignal_unsubscribe, name="onesignal_unsubscribe"),
+    path("onesignal/devices/", views.onesignal_devices, name="onesignal_devices"),
 ]

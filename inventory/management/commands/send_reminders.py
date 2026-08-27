@@ -5,7 +5,7 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 from datetime import timedelta
 
-from inventory.models import Notification, Reminder, Request, Transaction, send_webpush_notification
+from inventory.models import Notification, Reminder, Request, Transaction, send_push_notification
 
 
 def _active_requests_qs():
@@ -95,7 +95,7 @@ def send_reminder_notifications(due_soon_hours=24, cooldown_hours=24):
             title=title,
             message=message,
         )
-        send_webpush_notification(user, title, message)
+        send_push_notification(user, title, message)
         Reminder.objects.create(user=user, transaction=txn, reminder_type=reminder_type)
         sent += 1
 

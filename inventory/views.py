@@ -37,12 +37,12 @@ from .models import (
     Location,
     Maintenance,
     Notification,
+    OneSignalPlayer,
     Request,
     RequestItem,
     StockTake,
     StockTakeItem,
     Transaction,
-    WebPushDevice,
     display_name,
     notify_request_received,
     notify_transaction_change,
@@ -859,7 +859,6 @@ def account_page(request):
             "user_notifications": page_obj,
             "user_notifications_unread": user_notifications_unread,
             "overdue_items": overdue_items,
-            "webpush_vapid_public_key": getattr(settings, "WEBPUSH_VAPID_PUBLIC_KEY", ""),
         },
     )
 
@@ -2779,61 +2778,53 @@ def stock_take_detail(request, pk):
 
 @login_required
 @require_POST
-def webpush_subscribe(request):
-    """Save or update a browser push subscription for the current user."""
+def onesignal_subscribe(request):
+    """Register or update a OneSignal player ID for the current user."""
     try:
         payload = json.loads(request.body or "{}")
     except json.JSONDecodeError:
         return JsonResponse({"ok": False, "error": "Invalid JSON."}, status=400)
 
-    endpoint = (payload.get("endpoint") or "").strip()
-    auth = (payload.get("keys", {}).get("auth") or "").strip()
-    p256dh = (payload.get("keys", {}).get("p256dh") or "").strip()
+    player_id = (payload.get("player_id") or "").strip()
     user_agent = (payload.get("userAgent") or request.META.get("HTTP_USER_AGENT", "")).strip()[:512]
+    if not player_id:
+        return JsonResponse({"ok": False, "error": "Missing player_id."}, status=400)
 
-    if not endpoint or not auth or not p256dh:
-        return JsonResponse({"ok": False, "error": "Missing subscription fields."}, status=400)
-
-    device, created = WebPushDevice.objects.update_or_create(
-        endpoint=endpoint,
+    OneSignalPlayer.objects.update_or_create(
+        player_id=player_id,
         defaults={
             "user": request.user,
-            "auth": auth,
-            "p256dh": p256dh,
             "user_agent": user_agent,
             "last_used": timezone.now(),
         },
     )
-    status = "created" if created else "updated"
-    return JsonResponse({"ok": True, "status": status})
+    return JsonResponse({"ok": True, "status": "subscribed"})
 
 
 @login_required
 @require_POST
-def webpush_unsubscribe(request):
-    """Remove a browser push subscription for the current user."""
+def onesignal_unsubscribe(request):
+    """Remove a OneSignal player ID for the current user."""
     try:
         payload = json.loads(request.body or "{}")
     except json.JSONDecodeError:
         return JsonResponse({"ok": False, "error": "Invalid JSON."}, status=400)
 
-    endpoint = (payload.get("endpoint") or "").strip()
-    if not endpoint:
-        return JsonResponse({"ok": False, "error": "Missing endpoint."}, status=400)
+    player_id = (payload.get("player_id") or "").strip()
+    if not player_id:
+        return JsonResponse({"ok": False, "error": "Missing player_id."}, status=400)
 
-    qs = WebPushDevice.objects.filter(endpoint=endpoint, user=request.user)
-    deleted, _ = qs.delete()
+    deleted, _ = OneSignalPlayer.objects.filter(player_id=player_id, user=request.user).delete()
     return JsonResponse({"ok": True, "deleted": deleted})
 
 
 @login_required
-def webpush_devices(request):
-    """List the current user's push devices (JSON)."""
-    devices = WebPushDevice.objects.filter(user=request.user).order_by("-created_at")
+def onesignal_devices(request):
+    """List the current user's OneSignal player IDs (JSON)."""
+    devices = OneSignalPlayer.objects.filter(user=request.user).order_by("-created_at")
     data = [
         {
-            "id": d.pk,
-            "endpoint": d.endpoint,
+            "player_id": d.player_id,
             "user_agent": d.user_agent,
             "created_at": d.created_at.isoformat(),
             "last_used": d.last_used.isoformat(),
@@ -2841,56 +2832,4 @@ def webpush_devices(request):
         for d in devices
     ]
     return JsonResponse({"ok": True, "devices": data})
-
-
-@login_required
-@require_POST
-def webpush_send_test(request):
-    """Send a test push notification to all of the current user's devices."""
-    from pywebpush import webpush, WebPushException
-    from django.conf import settings
-
-    vapid_private_key = getattr(settings, "WEBPUSH_VAPID_PRIVATE_KEY", "")
-    vapid_admin_email = getattr(settings, "WEBPUSH_VAPID_ADMIN_EMAIL", "")
-    if not vapid_private_key:
-        return JsonResponse({"ok": False, "error": "VAPID private key is not configured."}, status=500)
-
-    devices = WebPushDevice.objects.filter(user=request.user)
-    results = []
-    for device in devices:
-        try:
-            webpush(
-                subscription_info={
-                    "endpoint": device.endpoint,
-                    "keys": {"auth": device.auth, "p256dh": device.p256dh},
-                },
-                data=json.dumps({"title": "Kwena Storage", "body": "Test notification from the inventory system."}),
-                vapid_private_key=vapid_private_key,
-                vapid_claims={"sub": f"mailto:{vapid_admin_email}"},
-            )
-            device.last_used = timezone.now()
-            device.save(update_fields=["last_used"])
-            results.append({"endpoint": device.endpoint, "status": "sent"})
-        except WebPushException as exc:
-            results.append({"endpoint": device.endpoint, "status": "failed", "error": str(exc)})
-        except Exception as exc:
-            results.append({"endpoint": device.endpoint, "status": "failed", "error": str(exc)})
-
-    return JsonResponse({"ok": True, "results": results})
-
-
-def service_worker(request):
-    """Serve the push service worker with the correct content type."""
-    from django.http import HttpResponse
-    from django.template.loader import render_to_string
-    from django.conf import settings
-
-    sw_path = settings.BASE_DIR / 'static' / 'js' / 'sw.js'
-    try:
-        content = sw_path.read_text(encoding='utf-8')
-    except OSError:
-        content = ''
-    response = HttpResponse(content, content_type='application/javascript')
-    response['Cache-Control'] = 'no-store'
-    return response
 

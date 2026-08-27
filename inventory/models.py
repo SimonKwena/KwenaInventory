@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import urllib.request
+import urllib.error
 from datetime import timedelta
 from io import BytesIO
 
@@ -12,7 +14,6 @@ from django.core.files.base import ContentFile
 from django.core.mail import send_mail
 from django.db import models
 from django.utils import timezone
-from pywebpush import webpush
 
 logger = logging.getLogger(__name__)
 
@@ -973,7 +974,7 @@ def notify_transaction_change(txn, kind, *, actor_name=""):
     )
     if getattr(settings, "EMAIL_BACKEND", None):
         notification.send_email()
-    send_webpush_notification(target_user, title, message)
+    send_push_notification(target_user, title, message)
     return notification
 
 
@@ -1020,7 +1021,7 @@ def notify_request_received(request_obj):
         message=message,
     )
     notification.send_email()
-    send_webpush_notification(request_obj.user, title, message)
+    send_push_notification(request_obj.user, title, message)
     return notification
 
 
@@ -1038,18 +1039,15 @@ def cleanup_old_notifications(days=180, keep_unread=True):
     return deleted or 0
 
 
-class WebPushDevice(models.Model):
-    """A browser push subscription for a user.
+class OneSignalPlayer(models.Model):
+    """A OneSignal player ID linked to a Django user.
 
-    Each row stores the endpoint URL and cryptographic material needed to send
-    a push message to that specific browser instance. A user may have multiple
-    devices (different browsers / profiles).
+    OneSignal uses player IDs to identify specific browser/device instances
+    for cross-browser push delivery. A user may have multiple player IDs.
     """
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="webpush_devices")
-    endpoint = models.URLField(max_length=500, unique=True)
-    auth = models.CharField(max_length=256)
-    p256dh = models.CharField(max_length=256)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="onesignal_players")
+    player_id = models.CharField(max_length=255, unique=True)
     user_agent = models.CharField(max_length=512, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     last_used = models.DateTimeField(default=timezone.now)
@@ -1061,38 +1059,52 @@ class WebPushDevice(models.Model):
         ]
 
     def __str__(self):
-        return f"Push device for {self.user.username}"
+        return f"OneSignal player for {self.user.username}"
 
 
-def send_webpush_notification(user, title, message, url=""):
-    """Send a push notification to all active devices for ``user``.
+def send_push_notification(user, title, message, url=""):
+    """Send a push notification via OneSignal to all of the user's registered
+    player IDs.
 
-    Returns the number of devices the push was successfully delivered to.
+    Returns the number of notifications accepted by OneSignal.
     Failures are logged but never raised so notification delivery never
     interrupts the calling workflow.
     """
-    if not getattr(settings, "WEBPUSH_VAPID_PRIVATE_KEY", ""):
+    app_id = getattr(settings, "ONESIGNAL_APP_ID", "")
+    rest_key = getattr(settings, "ONESIGNAL_REST_API_KEY", "")
+    if not app_id or not rest_key:
         return 0
-    devices = WebPushDevice.objects.filter(user=user)
-    if not devices.exists():
+    players = list(
+        OneSignalPlayer.objects.filter(user=user).values_list("player_id", flat=True)
+    )
+    if not players:
         return 0
-    payload = json.dumps({"title": title, "body": message, "url": url or "/"})
+    payload = json.dumps({
+        "app_id": app_id,
+        "include_player_ids": players,
+        "headings": {"en": title},
+        "contents": {"en": message},
+        "url": url or "/",
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://onesignal.com/api/v1/notifications",
+        data=payload,
+        headers={
+            "Content-Type": "application/json; charset=utf-8",
+            "Authorization": f"Basic {rest_key}",
+        },
+        method="POST",
+    )
     sent = 0
-    for device in devices:
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status == 200:
+                sent = len(players)
+    except Exception:
+        logger.exception("OneSignal push failed for user %s", user.pk)
+    for pid in players:
         try:
-            webpush(
-                subscription_info={
-                    "endpoint": device.endpoint,
-                    "keys": {"auth": device.auth, "p256dh": device.p256dh},
-                },
-                data=payload,
-                vapid_private_key=getattr(settings, "WEBPUSH_VAPID_PRIVATE_KEY", ""),
-                vapid_claims={"sub": f"mailto:{getattr(settings, 'WEBPUSH_VAPID_ADMIN_EMAIL', '')}"},
-                timeout=10,
-            )
-            device.last_used = timezone.now()
-            device.save(update_fields=["last_used"])
-            sent += 1
+            OneSignalPlayer.objects.filter(player_id=pid).update(last_used=timezone.now())
         except Exception:
-            logger.exception("Web push failed for user %s device %s", user.pk, device.endpoint)
+            logger.exception("Failed to update OneSignal player last_used for %s", pid)
     return sent

@@ -13,8 +13,11 @@
     <script defer src="{% static 'js/vendor/jsQR.min.js' %}?v=1"></script>
     {% if request.user.is_authenticated %}
     <script>
-        window.__WEBPUSH_VAPID_PUBLIC_KEY__ = "{{ webpush_vapid_public_key|default:'' }}";
+        window.__ONESIGNAL_APP_ID__ = "{{ onesignal_app_id|default:'' }}";
     </script>
+    {% endif %}
+    {% if onesignal_app_id %}
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     {% endif %}
     <script defer src="{% static 'js/site.js' %}?v=44"></script>
 </head>

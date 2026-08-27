@@ -31,7 +31,7 @@ def account_notifications(request):
             "user_role_label": "Student",
             "is_staff_role": False,
             "cart_counts": _cart_counts(request),
-            "webpush_vapid_public_key": "",
+            "onesignal_app_id": getattr(settings, "ONESIGNAL_APP_ID", ""),
         }
     now = timezone.now()
     announcement_count = (
@@ -58,5 +58,5 @@ def account_notifications(request):
         "is_teacher": role_of(user) == ROLE_TEACHER,
         "is_staff_role": is_staff_role(user),
         "cart_counts": _cart_counts(request),
-        "webpush_vapid_public_key": getattr(settings, "WEBPUSH_VAPID_PUBLIC_KEY", ""),
+        "onesignal_app_id": getattr(settings, "ONESIGNAL_APP_ID", ""),
     }
