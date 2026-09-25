@@ -2348,7 +2348,7 @@ def item_edit(request, pk):
     stock_entry = get_object_or_404(StockEntry, pk=pk)
     catalog = stock_entry.catalog_item
     if request.method == "POST":
-        form = ItemForm(request.POST, request.FILES, user=request.user)
+        form = ItemForm(request.POST, request.FILES, instance=stock_entry, user=request.user)
         if form.is_valid():
             sku = (form.cleaned_data.get("sku") or "").strip()
             target_catalog = CatalogItem.objects.filter(sku__iexact=sku).exclude(pk=catalog.pk).first() if sku else None
