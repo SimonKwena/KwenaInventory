@@ -2217,7 +2217,8 @@ def item_list(request):
 
     grouped = {}
     for entry in stock_entries:
-        grouped.setdefault(entry.catalog_item, []).append(entry)
+        if entry.pk:
+            grouped.setdefault(entry.catalog_item, []).append(entry)
 
     grouped_items = []
     for catalog, entries in grouped.items():
@@ -2226,6 +2227,7 @@ def item_list(request):
             "catalog": catalog,
             "entries": entries,
             "total_available": total_available,
+            "first_entry": entries[0] if entries else None,
         })
 
     total_items = stock_entries.count()

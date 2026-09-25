@@ -93,7 +93,8 @@
                 </thead>
                 <tbody>
                     {% for group in grouped_items %}
-                        {% with first_entry=group.entries|first %}
+                        {% with first_entry=group.first_entry %}
+                        {% if first_entry and first_entry.pk %}
                         <tr class="all-item-row catalog-parent" data-location="" data-category="{{ first_entry.catalog_item.category }}" data-available="{{ group.total_available }}" data-search="{{ first_entry.name }} {{ first_entry.catalog_item.sku }} {{ first_entry.catalog_item.category }} {{ first_entry.catalog_item.subcategory }}">
                             <td>
                                 <a class="text-link" href="{% url 'inventory:item_detail' first_entry.pk %}">{{ first_entry.name }}</a>
@@ -110,29 +111,32 @@
                                 </span>
                             </td>
                         </tr>
+                        {% endif %}
                         {% endwith %}
                         {% for entry in group.entries %}
-                        <tr class="all-item-row location-child" data-location="{{ entry.location.name }}" data-category="{{ entry.catalog_item.category }}" data-available="{{ entry.quantity_available }}" data-search="{{ entry.name }} {{ entry.catalog_item.sku }} {{ entry.catalog_item.category }} {{ entry.catalog_item.subcategory }}">
-                            <td class="indent">&nbsp;&nbsp;&nbsp;&nbsp;{{ entry.location.name }}</td>
-                            <td>&nbsp;</td>
-                            <td>{{ entry.condition.name|default:"&mdash;" }}</td>
-                            <td>{{ entry.quantity_total }}</td>
-                            <td>
-                                {% if entry.quantity_available > 0 %}
-                                    <span class="pill pill-success">{{ entry.quantity_available }}</span>
-                                {% else %}
-                                    <span class="pill pill-danger">0</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ entry.quantity_out }}</td>
-                            <td class="actions-cell items-actions">
-                                <span class="actions-inner">
-                                    {% if user_role == "superadmin" %}
-                                    <a class="button-link secondary btn-sm" href="{% url 'inventory:item_edit' entry.pk %}">Edit</a>
+                            {% if entry.pk %}
+                            <tr class="all-item-row location-child" data-location="{{ entry.location.name }}" data-category="{{ entry.catalog_item.category }}" data-available="{{ entry.quantity_available }}" data-search="{{ entry.name }} {{ entry.catalog_item.sku }} {{ entry.catalog_item.category }} {{ entry.catalog_item.subcategory }}">
+                                <td class="indent">&nbsp;&nbsp;&nbsp;&nbsp;{{ entry.location.name }}</td>
+                                <td>&nbsp;</td>
+                                <td>{{ entry.condition.name|default:"&mdash;" }}</td>
+                                <td>{{ entry.quantity_total }}</td>
+                                <td>
+                                    {% if entry.quantity_available > 0 %}
+                                        <span class="pill pill-success">{{ entry.quantity_available }}</span>
+                                    {% else %}
+                                        <span class="pill pill-danger">0</span>
                                     {% endif %}
-                                </span>
-                            </td>
-                        </tr>
+                                </td>
+                                <td>{{ entry.quantity_out }}</td>
+                                <td class="actions-cell items-actions">
+                                    <span class="actions-inner">
+                                        {% if user_role == "superadmin" %}
+                                        <a class="button-link secondary btn-sm" href="{% url 'inventory:item_edit' entry.pk %}">Edit</a>
+                                        {% endif %}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endif %}
                         {% endfor %}
                     {% empty %}
                         <tr class="all-item-row"><td colspan="8">No items yet. Use "Add item" to create one.</td></tr>
