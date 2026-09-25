@@ -276,6 +276,14 @@ class CatalogItemBasicForm(forms.ModelForm):
     def clean_sku(self):
         return (self.cleaned_data.get("sku") or "").strip()
 
+    def validate_unique(self):
+        exclude = self._get_validation_exclusions()
+        exclude.add("sku")
+        try:
+            self.instance.validate_unique(exclude=exclude)
+        except forms.ValidationError as e:
+            self._update_errors(e)
+
     def clean(self):
         cleaned = super().clean()
         category = cleaned.get("category")
