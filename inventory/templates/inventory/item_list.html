@@ -33,6 +33,28 @@
         <p class="section-note" style="margin-top:4px;">Updated {{ last_updated|date:"d M Y, H:i" }}</p>
     </div>
 
+    <style>
+        .catalog-parent td {
+            background: rgba(255,255,255,0.04);
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .location-child td {
+            padding-left: 18px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .location-child td:first-child::before {
+            content: "";
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.25);
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+    </style>
+
 <div class="card">
     <button type="button" class="collapse-toggle" aria-expanded="true">
         <h3>All items</h3>
@@ -100,9 +122,18 @@
                                 <a class="text-link" href="{% url 'inventory:item_detail' first_entry.pk %}">{{ first_entry.name }}</a>
                             </td>
                             <td>{{ first_entry.catalog_item.category }}{% if first_entry.catalog_item.subcategory %} &middot; {{ first_entry.catalog_item.subcategory }}{% endif %}</td>
-                            <td colspan="5">
+                            <td>
                                 <span class="pill pill-neutral">{{ group.entries|length }} location{{ group.entries|length|pluralize }}</span>
                             </td>
+                            <td>{{ group.total_qty }}</td>
+                            <td>
+                                {% if group.total_available > 0 %}
+                                    <span class="pill pill-success">{{ group.total_available }}</span>
+                                {% else %}
+                                    <span class="pill pill-danger">0</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ group.total_out }}</td>
                             <td class="actions-cell items-actions">
                                 <span class="actions-inner">
                                     {% if user_role == "superadmin" %}
@@ -116,17 +147,11 @@
                         {% for entry in group.entries %}
                             {% if entry.pk %}
                             <tr class="all-item-row location-child" data-location="{{ entry.location.name }}" data-category="{{ entry.catalog_item.category }}" data-available="{{ entry.quantity_available }}" data-search="{{ entry.name }} {{ entry.catalog_item.sku }} {{ entry.catalog_item.category }} {{ entry.catalog_item.subcategory }}">
-                                <td class="indent">&nbsp;&nbsp;&nbsp;&nbsp;{{ entry.location.name }}</td>
+                                <td class="indent">{{ entry.location.name }}</td>
+                                <td>&nbsp;</td>
                                 <td>&nbsp;</td>
                                 <td>{{ entry.condition.name|default:"&mdash;" }}</td>
-                                <td>{{ entry.quantity_total }}</td>
-                                <td>
-                                    {% if entry.quantity_available > 0 %}
-                                        <span class="pill pill-success">{{ entry.quantity_available }}</span>
-                                    {% else %}
-                                        <span class="pill pill-danger">0</span>
-                                    {% endif %}
-                                </td>
+                                <td>{{ entry.quantity_available }}</td>
                                 <td>{{ entry.quantity_out }}</td>
                                 <td class="actions-cell items-actions">
                                     <span class="actions-inner">

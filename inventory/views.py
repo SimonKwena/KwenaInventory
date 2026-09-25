@@ -2223,10 +2223,14 @@ def item_list(request):
     grouped_items = []
     for catalog, entries in grouped.items():
         total_available = sum(entry.quantity_available for entry in entries)
+        total_out = sum(entry.quantity_out for entry in entries)
+        total_qty = sum(entry.quantity_total for entry in entries)
         grouped_items.append({
             "catalog": catalog,
             "entries": entries,
             "total_available": total_available,
+            "total_out": total_out,
+            "total_qty": total_qty,
             "first_entry": entries[0] if entries else None,
         })
 
