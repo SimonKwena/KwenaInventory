@@ -2260,7 +2260,7 @@ def item_list(request):
 def item_create(request):
     if request.method == "POST":
         form = ItemForm(request.POST, request.FILES)
-        formset = StockEntryFormSet(request.POST, form_kwargs={"user": request.user})
+        formset = StockEntryFormSet(request.POST, user=request.user)
         if form.is_valid() and formset.is_valid():
             sku = (form.cleaned_data.get("sku") or "").strip()
             image = request.FILES.get("image") or form.cleaned_data.get("image")
@@ -2311,7 +2311,7 @@ def item_create(request):
             messages.error(request, "Please add at least one location.")
     else:
         form = ItemForm()
-        formset = StockEntryFormSet(queryset=StockEntry.objects.none(), form_kwargs={"user": request.user})
+        formset = StockEntryFormSet(queryset=StockEntry.objects.none(), user=request.user)
     return render(request, "inventory/item_form.html", {"form": form, "formset": formset, "is_edit": False})
 
 
@@ -2321,7 +2321,7 @@ def item_edit(request, pk):
     catalog = stock_entry.catalog_item
     if request.method == "POST":
         form = ItemForm(request.POST, request.FILES, instance=catalog)
-        formset = StockEntryFormSet(request.POST, queryset=StockEntry.objects.filter(catalog_item=catalog), form_kwargs={"user": request.user})
+        formset = StockEntryFormSet(request.POST, queryset=StockEntry.objects.filter(catalog_item=catalog), user=request.user)
         if form.is_valid() and formset.is_valid():
             form.save()
             for stock_form in formset:
@@ -2349,7 +2349,7 @@ def item_edit(request, pk):
             return redirect("inventory:item_detail", pk=stock_entry.pk)
     else:
         form = ItemForm(instance=catalog)
-        formset = StockEntryFormSet(queryset=StockEntry.objects.filter(catalog_item=catalog), form_kwargs={"user": request.user})
+        formset = StockEntryFormSet(queryset=StockEntry.objects.filter(catalog_item=catalog), user=request.user)
     return render(request, "inventory/item_form.html", {"form": form, "formset": formset, "is_edit": True, "item": stock_entry})
 
 

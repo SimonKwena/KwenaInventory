@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
-from django.forms.models import construct_instance, modelformset_factory
+from django.forms.models import BaseModelFormSet, construct_instance, modelformset_factory
 
 from .models import (
     Announcement,
@@ -15,6 +15,43 @@ from .models import (
     UserProfile,
 )
 from .permissions import ROLE_CHOICES, visible_locations
+
+
+class StockEntryRowForm(forms.ModelForm):
+    class Meta:
+        model = StockEntry
+        fields = ["location", "quantity_total", "quantity_out", "quantity_maintenance", "condition", "status"]
+        labels = {
+            "quantity_total": "Qty",
+            "quantity_out": "Out",
+            "quantity_maintenance": "Maint",
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["location"].queryset = visible_locations(user)
+        self.fields["condition"].queryset = ConditionOption.objects.filter(is_active=True).order_by("name")
+        self.fields["status"].queryset = StatusOption.objects.filter(is_active=True).order_by("name")
+
+
+class StockEntryFormSet(BaseModelFormSet):
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def _construct_form(self, i, **kwargs):
+        kwargs["user"] = self.user
+        return super()._construct_form(i, **kwargs)
+
+
+StockEntryFormSet = modelformset_factory(
+    StockEntry,
+    form=StockEntryRowForm,
+    formset=StockEntryFormSet,
+    extra=1,
+    can_delete=True,
+    fields=["location", "quantity_total", "quantity_out", "quantity_maintenance", "condition", "status"],
+)
 
 
 class LocalAccountForm(forms.ModelForm):
@@ -294,8 +331,42 @@ class CatalogItemBasicForm(forms.ModelForm):
             cleaned["subcategory"] = subcategory.strip()
         return cleaned
 
-    def clean_sku(self):
-        return (self.cleaned_data.get("sku") or "").strip()
+
+class StockEntryRowForm(forms.ModelForm):
+    class Meta:
+        model = StockEntry
+        fields = ["location", "quantity_total", "quantity_out", "quantity_maintenance", "condition", "status"]
+        labels = {
+            "quantity_total": "Qty",
+            "quantity_out": "Out",
+            "quantity_maintenance": "Maint",
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["location"].queryset = visible_locations(user)
+        self.fields["condition"].queryset = ConditionOption.objects.filter(is_active=True).order_by("name")
+        self.fields["status"].queryset = StatusOption.objects.filter(is_active=True).order_by("name")
+
+
+class _StockEntryFormSet(BaseModelFormSet):
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def _construct_form(self, i, **kwargs):
+        kwargs["user"] = self.user
+        return super()._construct_form(i, **kwargs)
+
+
+StockEntryFormSet = modelformset_factory(
+    StockEntry,
+    form=StockEntryRowForm,
+    formset=_StockEntryFormSet,
+    extra=1,
+    can_delete=True,
+    fields=["location", "quantity_total", "quantity_out", "quantity_maintenance", "condition", "status"],
+)
 
 
 class StockEntryBasicForm(forms.ModelForm):
