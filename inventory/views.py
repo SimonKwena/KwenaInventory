@@ -2315,8 +2315,12 @@ def item_create(request):
                         status=form.cleaned_data.get("status"),
                     )
                     messages.success(request, f"Added {stock_entry.name} @ {stock_entry.location.name}. A QR code was generated automatically.")
-                request.session.pop(ITEM_CREATE_DRAFT_SESSION_KEY, None)
-                return redirect("inventory:item_detail", pk=stock_entry.pk)
+                draft["last_stock_entry_pk"] = stock_entry.pk
+                request.session[ITEM_CREATE_DRAFT_SESSION_KEY] = draft
+                if request.GET.get("repeat") != "1":
+                    request.session.pop(ITEM_CREATE_DRAFT_SESSION_KEY, None)
+                    return redirect("inventory:item_detail", pk=stock_entry.pk)
+                return redirect(f"{reverse('inventory:item_create')}?step=2&repeat=1")
     else:
         if step == "2":
             if not draft.get("catalog_data"):
@@ -2333,6 +2337,8 @@ def item_create(request):
             "is_edit": False,
             "create_step": step,
             "catalog_draft": draft.get("catalog_data") if step == "2" else None,
+            "repeat_mode": request.GET.get("repeat") == "1",
+            "last_stock_entry_pk": draft.get("last_stock_entry_pk"),
         },
     )
 

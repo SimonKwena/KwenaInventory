@@ -32,22 +32,23 @@
 </div>
 
 <div class="card">
-    <form method="post" action="{% if is_edit %}{% url 'inventory:item_edit' item.pk %}{% else %}{% url 'inventory:item_create' %}{% endif %}" enctype="multipart/form-data">
+    <form method="post" action="{% if is_edit %}{% url 'inventory:item_edit' item.pk %}{% elif repeat_mode %}{% url 'inventory:item_create' %}?repeat=1{% else %}{% url 'inventory:item_create' %}{% endif %}" enctype="multipart/form-data">
         {% csrf_token %}
         {% if form.non_field_errors %}
             <div class="message error">{% for e in form.non_field_errors %}<span>{{ e }}</span>{% endfor %}</div>
         {% endif %}
 
-        {% if create_step == "2" and catalog_draft %}
+        {% if not is_edit and create_step == "2" %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="message {{ message.tags }}"><span>{{ message }}</span></div>
+                {% endfor %}
+            {% endif %}
             <div class="card-light" style="margin-bottom:18px;">
                 <strong>Item type:</strong> {{ catalog_draft.name }}{% if catalog_draft.sku %} &middot; {{ catalog_draft.sku }}{% endif %}{% if catalog_draft.category %} &middot; {{ catalog_draft.category }}{% endif %}
                 <input type="hidden" name="step" value="2">
             </div>
-        {% elif not is_edit %}
-            <input type="hidden" name="step" value="{{ create_step|default:'1' }}">
-        {% endif %}
 
-        {% if not is_edit and create_step == "2" %}
             <h3 class="form-section-title">Stock</h3>
             <div class="form-row form-row-half">
                 <div class="field-input-group">
@@ -84,7 +85,8 @@
             </div>
 
             <div class="actions">
-                <button type="submit" class="button-link">Add item</button>
+                <button type="submit" class="button-link">Add another room</button>
+                <a class="button-link secondary" href="{% if last_stock_entry_pk %}{% url 'inventory:item_detail' pk=last_stock_entry_pk %}{% else %}{% url 'inventory:dashboard' %}{% endif %}">Finish</a>
                 <a class="button-link secondary" href="{% url 'inventory:item_create' %}">Start over</a>
             </div>
         {% else %}
