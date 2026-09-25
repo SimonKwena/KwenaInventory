@@ -241,6 +241,81 @@ class ItemForm(forms.ModelForm):
         return stock_entry
 
 
+class CatalogItemBasicForm(forms.ModelForm):
+    category_other = forms.CharField(required=False, label="Other category")
+    subcategory_other = forms.CharField(required=False, label="Other subcategory")
+
+    class Meta:
+        model = CatalogItem
+        fields = ["name", "description", "category", "subcategory", "sku", "image"]
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": 3}),
+            "sku": forms.TextInput(attrs={"placeholder": "Unique code, e.g. XLR-30M"}),
+        }
+        labels = {
+            "name": "Item name",
+            "sku": "SKU",
+            "image": "Photo (optional)",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        categories = list(
+            CatalogItem.objects.exclude(category="").values_list("category", flat=True).distinct().order_by("category")
+        )
+        subcategories = list(
+            CatalogItem.objects.exclude(subcategory="").values_list("subcategory", flat=True).distinct().order_by("subcategory")
+        )
+        self.fields["category"].widget = forms.Select(
+            choices=[("", "— select —")] + [(c, c) for c in categories] + [("Other", "Other…")]
+        )
+        self.fields["subcategory"].widget = forms.Select(
+            choices=[("", "— select —")] + [(s, s) for s in subcategories] + [("Other", "Other…")]
+        )
+
+    def clean_sku(self):
+        return (self.cleaned_data.get("sku") or "").strip()
+
+    def clean(self):
+        cleaned = super().clean()
+        category = cleaned.get("category")
+        if category == "Other":
+            other = (cleaned.get("category_other") or "").strip()
+            if not other:
+                self.add_error("category_other", "Please type the category.")
+            else:
+                cleaned["category"] = other
+        elif category:
+            cleaned["category"] = category.strip()
+
+        subcategory = cleaned.get("subcategory")
+        if subcategory == "Other":
+            other = (cleaned.get("subcategory_other") or "").strip()
+            if not other:
+                self.add_error("subcategory_other", "Please type the subcategory.")
+            else:
+                cleaned["subcategory"] = other
+        elif subcategory:
+            cleaned["subcategory"] = subcategory.strip()
+        return cleaned
+
+
+class StockEntryBasicForm(forms.ModelForm):
+    class Meta:
+        model = StockEntry
+        fields = ["location", "quantity_total", "quantity_out", "quantity_maintenance", "condition", "status"]
+        labels = {
+            "quantity_total": "Total quantity",
+            "quantity_out": "Quantity currently out",
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["location"].queryset = visible_locations(user)
+        self.fields["condition"].queryset = ConditionOption.objects.filter(is_active=True).order_by("name")
+        self.fields["status"].queryset = StatusOption.objects.filter(is_active=True).order_by("name")
+
+
 class UserAdminForm(forms.ModelForm):
     """Create / edit a Django auth user from the custom admin area."""
 

@@ -20,6 +20,7 @@ from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 
 from .forms import (
     AnnouncementForm,
+    CatalogItemBasicForm,
     GuestLoginForm,
     GuestProfileForm,
     ItemForm,
@@ -27,6 +28,7 @@ from .forms import (
     MaintenanceForm,
     RequestEditForm,
     ScanItemForm,
+    StockEntryBasicForm,
     TransactionForm,
 )
 from .models import (
@@ -112,6 +114,7 @@ def item_lookup(request):
 
 
 CART_SESSION_KEY = "gearroom_cart"
+ITEM_CREATE_DRAFT_SESSION_KEY = "item_create_draft"
 
 
 def _cart_items(request):
@@ -2239,71 +2242,96 @@ def item_list(request):
 
 @user_passes_test(is_superadmin)
 def item_create(request):
+    step = request.POST.get("step") or request.GET.get("step") or "1"
+    draft = request.session.get(ITEM_CREATE_DRAFT_SESSION_KEY, {})
     if request.method == "POST":
-        form = ItemForm(request.POST, request.FILES, user=request.user)
-        if form.is_valid():
-            sku = (form.cleaned_data.get("sku") or "").strip()
-            catalog = CatalogItem.objects.filter(sku__iexact=sku).first() if sku else None
-            location = form.cleaned_data.get("location")
-            added = form.cleaned_data.get("quantity_total") or 0
-            image = request.FILES.get("image")
+        if step == "1":
+            form = CatalogItemBasicForm(request.POST, request.FILES)
+            if form.is_valid():
+                request.session[ITEM_CREATE_DRAFT_SESSION_KEY] = {
+                    "catalog_data": form.cleaned_data,
+                }
+                request.session.modified = True
+                return redirect(f"{reverse('inventory:item_create')}?step=2")
+        else:
+            form = StockEntryBasicForm(request.POST, user=request.user)
+            if form.is_valid():
+                catalog_data = draft.get("catalog_data", {})
+                sku = (catalog_data.get("sku") or "").strip()
+                catalog = CatalogItem.objects.filter(sku__iexact=sku).first() if sku else None
+                location = form.cleaned_data.get("location")
+                added = form.cleaned_data.get("quantity_total") or 0
+                image = catalog_data.get("image") or request.FILES.get("image")
 
-            if catalog:
-                stock_entry = StockEntry.objects.filter(catalog_item=catalog, location=location).first()
-                if stock_entry:
-                    stock_entry.quantity_total = (stock_entry.quantity_total or 0) + added
-                    for field in ("quantity_out", "condition", "status"):
-                        value = form.cleaned_data.get(field)
-                        if value not in (None, ""):
-                            setattr(stock_entry, field, value)
-                    if image:
-                        stock_entry.catalog_item.image = image
-                        stock_entry.catalog_item.save(update_fields=["image"])
-                    stock_entry.save()
-                    messages.success(
-                        request,
-                        f"Restocked {stock_entry.name} @ {stock_entry.location.name}: +{added} unit(s). New total is {stock_entry.quantity_total}.",
-                    )
-                    return redirect("inventory:item_detail", pk=stock_entry.pk)
+                if catalog:
+                    stock_entry = StockEntry.objects.filter(catalog_item=catalog, location=location).first()
+                    if stock_entry:
+                        stock_entry.quantity_total = (stock_entry.quantity_total or 0) + added
+                        for field in ("quantity_out", "quantity_maintenance", "condition", "status"):
+                            value = form.cleaned_data.get(field)
+                            if value not in (None, ""):
+                                setattr(stock_entry, field, value)
+                        if image:
+                            stock_entry.catalog_item.image = image
+                            stock_entry.catalog_item.save(update_fields=["image"])
+                        stock_entry.save()
+                        messages.success(
+                            request,
+                            f"Restocked {stock_entry.name} @ {stock_entry.location.name}: +{added} unit(s). New total is {stock_entry.quantity_total}.",
+                        )
+                    else:
+                        stock_entry = StockEntry.objects.create(
+                            catalog_item=catalog,
+                            location=location,
+                            quantity_total=added,
+                            quantity_out=form.cleaned_data.get("quantity_out") or 0,
+                            quantity_maintenance=form.cleaned_data.get("quantity_maintenance") or 0,
+                            condition=form.cleaned_data.get("condition"),
+                            status=form.cleaned_data.get("status"),
+                        )
+                        if image:
+                            catalog.image = image
+                            catalog.save(update_fields=["image"])
+                        messages.success(request, f"Added {stock_entry.name} @ {stock_entry.location.name}. A QR code was generated automatically.")
                 else:
+                    catalog = CatalogItem.objects.create(
+                        name=catalog_data.get("name"),
+                        description=catalog_data.get("description") or "",
+                        category=catalog_data.get("category") or "",
+                        subcategory=catalog_data.get("subcategory") or "",
+                        sku=sku,
+                        image=image,
+                    )
                     stock_entry = StockEntry.objects.create(
                         catalog_item=catalog,
                         location=location,
                         quantity_total=added,
                         quantity_out=form.cleaned_data.get("quantity_out") or 0,
-                        quantity_maintenance=0,
+                        quantity_maintenance=form.cleaned_data.get("quantity_maintenance") or 0,
                         condition=form.cleaned_data.get("condition"),
                         status=form.cleaned_data.get("status"),
                     )
-                    if image:
-                        catalog.image = image
-                        catalog.save(update_fields=["image"])
                     messages.success(request, f"Added {stock_entry.name} @ {stock_entry.location.name}. A QR code was generated automatically.")
-                    return redirect("inventory:item_detail", pk=stock_entry.pk)
-
-            catalog = CatalogItem.objects.create(
-                name=form.cleaned_data.get("name"),
-                description=form.cleaned_data.get("description") or "",
-                category=form.cleaned_data.get("category") or "",
-                subcategory=form.cleaned_data.get("subcategory") or "",
-                sku=sku,
-                image=image,
-            )
-            stock_entry = StockEntry.objects.create(
-                catalog_item=catalog,
-                location=location,
-                quantity_total=added,
-                quantity_out=form.cleaned_data.get("quantity_out") or 0,
-                quantity_maintenance=0,
-                condition=form.cleaned_data.get("condition"),
-                status=form.cleaned_data.get("status"),
-            )
-            messages.success(request, f"Added {stock_entry.name} @ {stock_entry.location.name}. A QR code was generated automatically.")
-            return redirect("inventory:item_detail", pk=stock_entry.pk)
-        messages.error(request, "Please correct the errors below.")
+                request.session.pop(ITEM_CREATE_DRAFT_SESSION_KEY, None)
+                return redirect("inventory:item_detail", pk=stock_entry.pk)
     else:
-        form = ItemForm(user=request.user)
-    return render(request, "inventory/item_form.html", {"form": form, "is_edit": False})
+        if step == "2":
+            if not draft.get("catalog_data"):
+                return redirect("inventory:item_create")
+            form = StockEntryBasicForm(user=request.user)
+        else:
+            form = CatalogItemBasicForm()
+            request.session.pop(ITEM_CREATE_DRAFT_SESSION_KEY, None)
+    return render(
+        request,
+        "inventory/item_form.html",
+        {
+            "form": form,
+            "is_edit": False,
+            "create_step": step,
+            "catalog_draft": draft.get("catalog_data") if step == "2" else None,
+        },
+    )
 
 
 @user_passes_test(is_superadmin)

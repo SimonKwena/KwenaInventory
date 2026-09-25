@@ -6,12 +6,22 @@
 <div class="card">
     <div class="action-bar">
         <div>
-            <h2>{% if is_edit %}Edit item{% else %}Add item{% endif %}</h2>
+            <h2>
+                {% if is_edit %}
+                    Edit item
+                {% elif create_step == "2" %}
+                    Add item — room &amp; stock
+                {% else %}
+                    Add item
+                {% endif %}
+            </h2>
             <p class="section-note">
                 {% if is_edit %}
                     Update the gear details below. Entering a SKU that belongs to another item merges this one into it.
+                {% elif create_step == "2" %}
+                    Choose the room and starting quantities for this item. Use the same SKU to add it to another room later.
                 {% else %}
-                    Create a new piece of gear. A QR code is generated automatically; an existing SKU adds to that item's stock.
+                    Step 1: define the item type. You will choose the room and quantities in the next step.
                 {% endif %}
             </p>
         </div>
@@ -28,105 +38,115 @@
             <div class="message error">{% for e in form.non_field_errors %}<span>{{ e }}</span>{% endfor %}</div>
         {% endif %}
 
-        <h3 class="form-section-title">Details</h3>
-        <div class="form-row form-row-half">
-            <div class="field-input-group">
-                <label class="label" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
-                {{ form.name }}
-                {{ form.name.errors }}
+        {% if create_step == "2" and catalog_draft %}
+            <div class="card-light" style="margin-bottom:18px;">
+                <strong>Item type:</strong> {{ catalog_draft.name }}{% if catalog_draft.sku %} &middot; {{ catalog_draft.sku }}{% endif %}{% if catalog_draft.category %} &middot; {{ catalog_draft.category }}{% endif %}
+                <input type="hidden" name="step" value="2">
             </div>
-            <div class="field-input-group">
-                <label class="label" for="{{ form.sku.id_for_label }}">{{ form.sku.label }}</label>
-                {{ form.sku }}
-                {{ form.sku.errors }}
-            </div>
-        </div>
-        <div class="form-row form-row-half">
-            <div class="field-input-group">
-                <label class="label" for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
-                {{ form.category }}
-                {{ form.category.errors }}
-            </div>
-            <div class="field-input-group" id="category-other-wrap" style="display:none;">
-                <label class="label" for="{{ form.category_other.id_for_label }}">{{ form.category_other.label }}</label>
-                {{ form.category_other }}
-                {{ form.category_other.errors }}
-            </div>
-        </div>
-        <div class="form-row form-row-half">
-            <div class="field-input-group">
-                <label class="label" for="{{ form.subcategory.id_for_label }}">{{ form.subcategory.label }}</label>
-                {{ form.subcategory }}
-                {{ form.subcategory.errors }}
-            </div>
-            <div class="field-input-group" id="subcategory-other-wrap" style="display:none;">
-                <label class="label" for="{{ form.subcategory_other.id_for_label }}">{{ form.subcategory_other.label }}</label>
-                {{ form.subcategory_other }}
-                {{ form.subcategory_other.errors }}
-            </div>
-        </div>
-        <div class="form-row">
-            <div class="field-input-group">
-                <label class="label" for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
-                {{ form.description }}
-                {{ form.description.errors }}
-            </div>
-        </div>
-
-        <h3 class="form-section-title">Stock</h3>
-        <div class="form-row form-row-half">
-            <div class="field-input-group">
-                <label class="label" for="{{ form.quantity_total.id_for_label }}">{{ form.quantity_total.label }}</label>
-                {{ form.quantity_total }}
-                {{ form.quantity_total.errors }}
-            </div>
-            <div class="field-input-group">
-                <label class="label" for="{{ form.quantity_out.id_for_label }}">{{ form.quantity_out.label }}</label>
-                {{ form.quantity_out }}
-                {{ form.quantity_out.errors }}
-            </div>
-        </div>
-
-        <h3 class="form-section-title">Classification</h3>
-        <div class="form-row form-row-half">
-            <div class="field-input-group">
-                <label class="label" for="{{ form.location.id_for_label }}">{{ form.location.label }}</label>
-                {{ form.location }}
-                {{ form.location.errors }}
-            </div>
-            <div class="field-input-group">
-                <label class="label" for="{{ form.condition.id_for_label }}">{{ form.condition.label }}</label>
-                {{ form.condition }}
-                {{ form.condition.errors }}
-            </div>
-        </div>
-        <div class="form-row">
-            <div class="field-input-group">
-                <label class="label" for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
-                {{ form.status }}
-                {{ form.status.errors }}
-            </div>
-        </div>
-
-        <h3 class="form-section-title">Media</h3>
-        <div class="form-row">
-            <div class="field-input-group">
-                <label class="label" for="{{ form.image.id_for_label }}">{{ form.image.label }}</label>
-                {{ form.image }}
-                {{ form.image.errors }}
-            </div>
-        </div>
-        {% if is_edit and item.qr_image %}
-            <div class="qr-preview">
-                <span class="section-note">Current QR code</span>
-                <img src="{{ item.qr_image.url }}" alt="QR code for {{ item.name }}">
-            </div>
+        {% elif not is_edit %}
+            <input type="hidden" name="step" value="{{ create_step|default:'1' }}">
         {% endif %}
 
-        <div class="actions">
-            <button type="submit" class="button-link">{% if is_edit %}Save changes{% else %}Add item{% endif %}</button>
-            <a class="button-link secondary" href="{% url 'inventory:dashboard' %}">Cancel</a>
-        </div>
+        {% if not is_edit and create_step == "2" %}
+            <h3 class="form-section-title">Stock</h3>
+            <div class="form-row form-row-half">
+                <div class="field-input-group">
+                    <label class="label" for="{{ form.quantity_total.id_for_label }}">{{ form.quantity_total.label }}</label>
+                    {{ form.quantity_total }}
+                    {{ form.quantity_total.errors }}
+                </div>
+                <div class="field-input-group">
+                    <label class="label" for="{{ form.quantity_out.id_for_label }}">{{ form.quantity_out.label }}</label>
+                    {{ form.quantity_out }}
+                    {{ form.quantity_out.errors }}
+                </div>
+            </div>
+
+            <h3 class="form-section-title">Classification</h3>
+            <div class="form-row form-row-half">
+                <div class="field-input-group">
+                    <label class="label" for="{{ form.location.id_for_label }}">{{ form.location.label }}</label>
+                    {{ form.location }}
+                    {{ form.location.errors }}
+                </div>
+                <div class="field-input-group">
+                    <label class="label" for="{{ form.condition.id_for_label }}">{{ form.condition.label }}</label>
+                    {{ form.condition }}
+                    {{ form.condition.errors }}
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="field-input-group">
+                    <label class="label" for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
+                    {{ form.status }}
+                    {{ form.status.errors }}
+                </div>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="button-link">Add item</button>
+                <a class="button-link secondary" href="{% url 'inventory:item_create' %}">Start over</a>
+            </div>
+        {% else %}
+            <h3 class="form-section-title">Details</h3>
+            <div class="form-row form-row-half">
+                <div class="field-input-group">
+                    <label class="label" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                    {{ form.name }}
+                    {{ form.name.errors }}
+                </div>
+                <div class="field-input-group">
+                    <label class="label" for="{{ form.sku.id_for_label }}">{{ form.sku.label }}</label>
+                    {{ form.sku }}
+                    {{ form.sku.errors }}
+                </div>
+            </div>
+            <div class="form-row form-row-half">
+                <div class="field-input-group">
+                    <label class="label" for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
+                    {{ form.category }}
+                    {{ form.category.errors }}
+                </div>
+                <div class="field-input-group" id="category-other-wrap" style="display:none;">
+                    <label class="label" for="{{ form.category_other.id_for_label }}">{{ form.category_other.label }}</label>
+                    {{ form.category_other }}
+                    {{ form.category_other.errors }}
+                </div>
+            </div>
+            <div class="form-row form-row-half">
+                <div class="field-input-group">
+                    <label class="label" for="{{ form.subcategory.id_for_label }}">{{ form.subcategory.label }}</label>
+                    {{ form.subcategory }}
+                    {{ form.subcategory.errors }}
+                </div>
+                <div class="field-input-group" id="subcategory-other-wrap" style="display:none;">
+                    <label class="label" for="{{ form.subcategory_other.id_for_label }}">{{ form.subcategory_other.label }}</label>
+                    {{ form.subcategory_other }}
+                    {{ form.subcategory_other.errors }}
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="field-input-group">
+                    <label class="label" for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+                    {{ form.description }}
+                    {{ form.description.errors }}
+                </div>
+            </div>
+
+            <h3 class="form-section-title">Media</h3>
+            <div class="form-row">
+                <div class="field-input-group">
+                    <label class="label" for="{{ form.image.id_for_label }}">{{ form.image.label }}</label>
+                    {{ form.image }}
+                    {{ form.image.errors }}
+                </div>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="button-link">Continue</button>
+                <a class="button-link secondary" href="{% url 'inventory:dashboard' %}">Cancel</a>
+            </div>
+        {% endif %}
     </form>
 </div>
 
