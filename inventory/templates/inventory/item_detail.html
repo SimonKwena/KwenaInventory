@@ -46,11 +46,11 @@
     <div class="grid grid-2" style="align-items:start;">
         <div>
             <p><strong>Location:</strong> {{ item.location.name }}</p>
-            <p><strong>SKU:</strong> {{ item.sku }}</p>
-            <p><strong>Description:</strong> {{ item.description|default:"No description" }}</p>
+            <p><strong>SKU:</strong> {{ item.catalog_item.sku }}</p>
+            <p><strong>Description:</strong> {{ item.catalog_item.description|default:"No description" }}</p>
             <p><strong>Available:</strong> {{ item.quantity_available }} / {{ item.quantity_total }}</p>
             <p><strong>Out:</strong> {{ item.quantity_out }}</p>
-            {% if item.category %}<p><strong>Category:</strong> {{ item.category }}{% if item.subcategory %} &middot; {{ item.subcategory }}{% endif %}</p>{% endif %}
+            {% if item.catalog_item.category %}<p><strong>Category:</strong> {{ item.catalog_item.category }}{% if item.catalog_item.subcategory %} &middot; {{ item.catalog_item.subcategory }}{% endif %}</p>{% endif %}
         </div>
         {% if item.qr_image %}
         <div class="qr-area">
@@ -60,7 +60,7 @@
                 <span class="qr-caption">{{ item.name }}</span>
             </div>
             <div class="qr-actions">
-                <a class="button-link secondary btn-sm" href="{{ item.qr_image.url }}" download="{{ item.sku|default:item.name }}-qr.png">Download</a>
+                <a class="button-link secondary btn-sm" href="{{ item.qr_image.url }}" download="{{ item.catalog_item.sku|default:item.name }}-qr.png">Download</a>
                 <button type="button" class="button-link secondary btn-sm" id="print-qr">Print</button>
                 <button type="button" class="button-link secondary btn-sm" id="share-qr">Share</button>
             </div>

@@ -43,7 +43,7 @@
                     {% for item in take_items %}
                         <tr class="{% if item.difference != 0 %}is-discrepancy{% endif %}">
                             <td><a class="text-link" href="{% url 'inventory:item_detail' item.item.pk %}">{{ item.item.name }}</a></td>
-                            <td>{{ item.item.sku|default:"—" }}</td>
+                            <td>{{ item.item.catalog_item.sku|default:"—" }}</td>
                             <td>{{ item.expected_quantity }}</td>
                             <td>{{ item.counted_quantity }}</td>
                             <td>

@@ -6,10 +6,11 @@ from django.dispatch import receiver
 from . import live
 from .models import (
     Announcement,
-    Item,
+    CatalogItem,
     Maintenance,
     Request,
     RequestItem,
+    StockEntry,
     Transaction,
 )
 
@@ -17,7 +18,7 @@ from .models import (
 # Request/RequestItem back the "Pending requests" list and the pending badge, so
 # a newly submitted, approved, rejected or edited request must bump the version
 # too — otherwise those regions only refresh on the slow fallback poll.
-_TRACKED = (Item, Transaction, Announcement, Maintenance, Request, RequestItem)
+_TRACKED = (CatalogItem, StockEntry, Transaction, Announcement, Maintenance, Request, RequestItem)
 
 
 def connect():

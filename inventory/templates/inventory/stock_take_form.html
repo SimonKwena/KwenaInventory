@@ -54,7 +54,7 @@
                         {% for item in items %}
                             <tr>
                                 <td>{{ item.name }}</td>
-                                <td>{{ item.sku|default:"—" }}</td>
+                                <td>{{ item.catalog_item.sku|default:"—" }}</td>
                                 <td>{{ item.quantity_total }}</td>
                                 <td>
                                     <input type="number" name="counted_quantity" value="{{ item.quantity_total }}" min="0" class="text-input" style="width:80px;" data-item-id="{{ item.pk }}">

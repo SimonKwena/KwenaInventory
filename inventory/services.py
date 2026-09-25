@@ -18,7 +18,7 @@ from .models import (
     STATUS_LATE_RETURN,
     STATUS_MAINTENANCE,
     STATUS_OUT,
-    Item,
+    StockEntry,
     Maintenance,
     Notification,
     Transaction,
@@ -227,7 +227,7 @@ def record_item_transaction(
 ):
     # Lock the row so concurrent check-outs can't both read the same available
     # count and oversell the item.
-    item = Item.objects.select_for_update().get(pk=item.pk)
+    item = StockEntry.objects.select_for_update().get(pk=item.pk)
     quantity = max(1, int(quantity))
 
     if transaction_type == "check_out":
@@ -304,7 +304,7 @@ def create_pending_request(
     enough stock exists at submission time, but the real guard runs again at
     approval.
     """
-    item = Item.objects.select_for_update().get(pk=item.pk)
+    item = StockEntry.objects.select_for_update().get(pk=item.pk)
     quantity = max(1, int(quantity))
 
     if transaction_type == "check_out":
@@ -336,7 +336,7 @@ def apply_transaction(txn, decided_by):
     if txn.approval_status != "pending":
         return False, "This request has already been decided."
 
-    item = Item.objects.select_for_update().get(pk=txn.item.pk)
+    item = StockEntry.objects.select_for_update().get(pk=txn.item.pk)
     quantity = max(1, int(txn.quantity))
 
     if txn.transaction_type == "check_out":
@@ -414,7 +414,7 @@ def void_transaction(txn, decided_by, *, reason=""):
     if txn.is_voided:
         return False, "This transaction has already been voided."
 
-    item = Item.objects.select_for_update().get(pk=txn.item.pk)
+    item = StockEntry.objects.select_for_update().get(pk=txn.item.pk)
 
     update_fields = ["quantity_out"]
     if txn.transaction_type == "check_out" and txn.approval_status == "approved":
@@ -459,7 +459,7 @@ def create_request(
     """Create a single multi-item Request (one admin approval covers all lines).
 
     ``items`` is a list of dicts:
-        {"item": Item, "quantity": int, "location": Location|None, "condition": ConditionOption|None}
+        {"item": StockEntry, "quantity": int, "location": Location|None, "condition": ConditionOption|None}
     Each line is validated for available stock at submit time (per item), but no
     stock is moved yet — that happens when an admin approves the request.
 
@@ -516,7 +516,7 @@ def _apply_request_obj(request_obj, decided_by):
     if request_obj.approval_status != "pending":
         return False, "This request has already been decided."
     for line in request_obj.items.select_related("item").all():
-        item = Item.objects.select_for_update().get(pk=line.item.pk)
+        item = StockEntry.objects.select_for_update().get(pk=line.item.pk)
         quantity = max(1, int(line.quantity))
         # Re-check stock at approval (mirrors the per-item guard).
         if request_obj.transaction_type == "check_out" and item.quantity_available < quantity:
@@ -574,7 +574,7 @@ def hand_over_request(request_obj, decided_by):
         return False, "This reservation has already been handed over."
 
     for line in request_obj.items.select_related("item", "location").all():
-        item = Item.objects.select_for_update().get(pk=line.item.pk)
+        item = StockEntry.objects.select_for_update().get(pk=line.item.pk)
         quantity = max(1, int(line.quantity))
         if item.quantity_available < quantity:
             return False, f"Not enough available stock for {item.name} to hand over."
@@ -614,7 +614,7 @@ def return_request_by_code(reference_code, item_entries, *, decided_by, note="")
     The request's status flips to "Returned" automatically once every line's
     loan is fully back (handled by ``_close_reservations_on_return``).
 
-    ``item_entries`` is a list of ``{"item": Item, "quantity": int}``. An
+    ``item_entries`` is a list of ``{"item": StockEntry, "quantity": int}``. An
     optional ``note`` is appended to each check-in transaction's notes (e.g.
     "Checked in by Admin") so the audit trail records who handled the return.
     """
@@ -1028,7 +1028,7 @@ def get_user_request_history(user):
 @db_transaction.atomic
 def set_item_maintenance(item, *, user=None, reason="", expected_return=None, quantity=1, location=None):
     """Move units of an item into maintenance and open a maintenance record."""
-    item = Item.objects.select_for_update().get(pk=item.pk)
+    item = StockEntry.objects.select_for_update().get(pk=item.pk)
     quantity = max(1, int(quantity))
     quantity = min(quantity, item.quantity_available)
     item.quantity_maintenance = (item.quantity_maintenance or 0) + quantity
@@ -1056,7 +1056,7 @@ def complete_item_maintenance(record, *, user=None, notes=""):
         record.notes = notes
     record.save(update_fields=["completed_at", "completed_by", "completed_by_name", "outcome", "notes"])
 
-    item = Item.objects.select_for_update().get(pk=record.item.pk)
+    item = StockEntry.objects.select_for_update().get(pk=record.item.pk)
     returned = min(record.quantity or 0, item.quantity_maintenance or 0)
     item.quantity_maintenance = (item.quantity_maintenance or 0) - returned
     item.status = _resolve_status(item)
@@ -1081,7 +1081,7 @@ def write_off_maintenance(record, *, user=None, notes=""):
         record.notes = notes
     record.save(update_fields=["completed_at", "completed_by", "completed_by_name", "outcome", "notes"])
 
-    item = Item.objects.select_for_update().get(pk=record.item.pk)
+    item = StockEntry.objects.select_for_update().get(pk=record.item.pk)
     lost = min(record.quantity or 0, item.quantity_maintenance or 0)
     item.quantity_maintenance = (item.quantity_maintenance or 0) - lost
     item.quantity_total = max(0, (item.quantity_total or 0) - lost)

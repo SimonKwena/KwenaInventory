@@ -3,12 +3,13 @@ from django.contrib.auth.models import User
 
 from .models import (
     Announcement,
+    CatalogItem,
     ConditionOption,
     GuestProfile,
-    Item,
     Location,
     Maintenance,
     StatusOption,
+    StockEntry,
     Transaction,
     UserProfile,
 )
@@ -125,33 +126,40 @@ class ItemForm(forms.ModelForm):
     subcategory_other = forms.CharField(required=False, label="Other subcategory")
 
     class Meta:
-        model = Item
+        model = StockEntry
         fields = [
-            "name", "description", "category", "subcategory", "sku",
-            "quantity_total", "quantity_out", "location", "condition", "status", "image",
+            "catalog_item", "location", "quantity_total", "quantity_out", "quantity_maintenance", "condition", "status",
         ]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 3}),
             "sku": forms.TextInput(attrs={"placeholder": "Unique code, e.g. XLR-30M"}),
         }
         labels = {
-            "name": "Item name",
+            "catalog_item": "Item name",
             "quantity_total": "Total quantity",
             "quantity_out": "Quantity currently out",
             "image": "Photo (optional)",
         }
+
+    name = forms.CharField(max_length=250, required=False, label="Item name")
+    description = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), required=False, label="Description")
+    category = forms.CharField(max_length=100, required=False, label="Category")
+    subcategory = forms.CharField(max_length=100, required=False, label="Subcategory")
+    sku = forms.CharField(max_length=100, required=False, label="SKU")
+    image = forms.ImageField(required=False, label="Photo (optional)")
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["location"].queryset = visible_locations(user)
         self.fields["condition"].queryset = ConditionOption.objects.filter(is_active=True).order_by("name")
         self.fields["status"].queryset = StatusOption.objects.filter(is_active=True).order_by("name")
+        self.fields["catalog_item"].queryset = CatalogItem.objects.filter(is_active=True).order_by("name")
 
         categories = list(
-            Item.objects.exclude(category="").values_list("category", flat=True).distinct().order_by("category")
+            CatalogItem.objects.exclude(category="").values_list("category", flat=True).distinct().order_by("category")
         )
         subcategories = list(
-            Item.objects.exclude(subcategory="").values_list("subcategory", flat=True).distinct().order_by("subcategory")
+            CatalogItem.objects.exclude(subcategory="").values_list("subcategory", flat=True).distinct().order_by("subcategory")
         )
         self.fields["category"].widget = forms.Select(
             choices=[("", "— select —")] + [(c, c) for c in categories] + [("Other", "Other…")]
@@ -159,24 +167,28 @@ class ItemForm(forms.ModelForm):
         self.fields["subcategory"].widget = forms.Select(
             choices=[("", "— select —")] + [(s, s) for s in subcategories] + [("Other", "Other…")]
         )
-        if not self.instance.pk:
+        if self.instance.pk:
+            stock = self.instance
+            catalog = stock.catalog_item
+            self.fields["name"].initial = catalog.name
+            self.fields["description"].initial = catalog.description
+            self.fields["category"].initial = catalog.category
+            self.fields["subcategory"].initial = catalog.subcategory
+            self.fields["sku"].initial = catalog.sku
+            self.fields["quantity_out"].initial = stock.quantity_out
+            available = StatusOption.objects.filter(name="Available").first()
+            if available and not stock.status:
+                self.fields["status"].initial = available
+        else:
             self.fields["quantity_out"].initial = 0
             available = StatusOption.objects.filter(name="Available").first()
             if available:
                 self.fields["status"].initial = available
 
     def clean_sku(self):
-        # Uniqueness is handled by the views: a matching SKU on create restocks
-        # the item, and on edit merges the duplicate into it.
         return (self.cleaned_data.get("sku") or "").strip()
 
     def validate_unique(self):
-        # Skip Django's automatic "Item with this Sku already exists" check.
-        # A matching SKU is a valid, expected submission here (it drives the
-        # restock/merge flow in item_create()/item_edit()) rather than an
-        # error - the real uniqueness guard is the DB constraint on Item,
-        # which still protects against duplicates created outside this form
-        # (e.g. via /inventory/admin/ or a race between two submissions).
         exclude = self._get_validation_exclusions()
         exclude.add("sku")
         try:
@@ -211,6 +223,22 @@ class ItemForm(forms.ModelForm):
         elif subcategory:
             cleaned["subcategory"] = subcategory.strip()
         return cleaned
+
+    def save(self, commit=True):
+        stock_entry = super().save(commit=False)
+        catalog = stock_entry.catalog_item
+        if catalog:
+            catalog.name = self.cleaned_data.get("name") or catalog.name
+            catalog.description = self.cleaned_data.get("description") or catalog.description
+            catalog.category = self.cleaned_data.get("category") or catalog.category
+            catalog.subcategory = self.cleaned_data.get("subcategory") or catalog.subcategory
+            catalog.sku = self.cleaned_data.get("sku") or catalog.sku
+            if self.cleaned_data.get("image"):
+                catalog.image = self.cleaned_data["image"]
+            catalog.save(update_fields=["name", "description", "category", "subcategory", "sku", "image"])
+        if commit:
+            stock_entry.save()
+        return stock_entry
 
 
 class UserAdminForm(forms.ModelForm):
@@ -299,7 +327,7 @@ class AnnouncementForm(forms.ModelForm):
 class MaintenanceForm(forms.Form):
     asset_tag = forms.CharField(max_length=100, required=False, label="Asset tag / SKU")
     item = forms.ModelChoiceField(
-        queryset=Item.objects.filter(is_active=True).order_by("name"),
+        queryset=StockEntry.objects.filter(is_active=True).select_related("catalog_item").order_by("catalog_item__name"),
         required=True,
         label="Item",
     )
@@ -328,14 +356,13 @@ class MaintenanceForm(forms.Form):
         cleaned = super().clean()
         asset_tag = (cleaned.get("asset_tag") or "").strip()
         if asset_tag:
-            item = Item.objects.filter(sku__iexact=asset_tag, is_active=True).first()
+            item = StockEntry.objects.filter(catalog_item__sku__iexact=asset_tag, is_active=True).first()
             if not item:
                 self.add_error("asset_tag", "No item found with that SKU.")
             else:
                 cleaned["item"] = item
         if not cleaned.get("item"):
             self.add_error("item", "Choose an item or scan its QR code.")
-        # Default the maintenance location to where the item lives if none chosen.
         if not cleaned.get("location") and cleaned.get("item"):
             cleaned["location"] = cleaned["item"].location
         return cleaned
@@ -347,7 +374,7 @@ class RequestEditForm(forms.Form):
     transaction_type = forms.ChoiceField(choices=Transaction.TRANSACTION_TYPES, label="Action")
     approval_status = forms.ChoiceField(choices=Transaction.APPROVAL_CHOICES, label="Approval status")
     item = forms.ModelChoiceField(
-        queryset=Item.objects.filter(is_active=True).order_by("name"),
+        queryset=StockEntry.objects.filter(is_active=True).select_related("catalog_item").order_by("catalog_item__name"),
         label="Item",
     )
     quantity = forms.IntegerField(min_value=1, initial=1, label="Quantity")

@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import ConditionOption, Item, Location, Notification, StatusOption, Transaction
+from .models import CatalogItem, ConditionOption, Location, Notification, StatusOption, StockEntry, Transaction
 from .services import (
     apply_request,
     create_pending_request,
@@ -37,13 +37,16 @@ class InventoryViewsTests(TestCase):
         self.assertNotContains(response, "Book ahead or check in/out")
 
     def test_item_detail_page_loads_for_existing_item(self):
-        item = Item.objects.create(
+        catalog = CatalogItem.objects.create(
             name="Torch",
             description="Portable torch",
             sku="TORCH-01",
+        )
+        item = StockEntry.objects.create(
+            catalog_item=catalog,
+            location=self.location,
             quantity_total=5,
             quantity_out=0,
-            location=self.location,
             condition=self.condition,
             status=self.status,
         )
@@ -72,12 +75,15 @@ class ApprovalFlowTests(TestCase):
         self.condition = ConditionOption.objects.create(name="Good")
         self.status = StatusOption.objects.create(name="Available")
         self.out_status = StatusOption.objects.create(name="Out")
-        self.item = Item.objects.create(
+        catalog = CatalogItem.objects.create(
             name="Torch",
             sku="TORCH-01",
+        )
+        self.item = StockEntry.objects.create(
+            catalog_item=catalog,
+            location=self.location,
             quantity_total=5,
             quantity_out=0,
-            location=self.location,
             condition=self.condition,
             status=self.status,
         )
@@ -431,9 +437,10 @@ class ApprovalFlowTests(TestCase):
         txn, error = create_pending_request(
             self.item, "check_out", 1, user=self.member, expected_return=self._future()
         )
-        other = Item.objects.create(
-            name="Mic", sku="MIC-01", quantity_total=3, quantity_out=0,
-            location=self.location, condition=self.condition, status=self.status,
+        other = StockEntry.objects.create(
+            catalog_item=CatalogItem.objects.create(name="Mic", sku="MIC-01"),
+            location=self.location, quantity_total=3, quantity_out=0,
+            condition=self.condition, status=self.status,
         )
         future_out = (timezone.now() + timedelta(days=2)).strftime("%Y-%m-%dT%H:%M")
         future_in = (timezone.now() + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
@@ -504,9 +511,17 @@ class VoidTransactionTests(TestCase):
         self.location = Location.objects.create(name="Main Store")
         self.condition = ConditionOption.objects.create(name="Good")
         self.status = StatusOption.objects.create(name="Available")
-        self.item = Item.objects.create(
-            name="Torch", sku="TORCH-01", quantity_total=5, quantity_out=0,
-            location=self.location, condition=self.condition, status=self.status,
+        catalog = CatalogItem.objects.create(
+            name="Torch",
+            sku="TORCH-01",
+        )
+        self.item = StockEntry.objects.create(
+            catalog_item=catalog,
+            location=self.location,
+            quantity_total=5,
+            quantity_out=0,
+            condition=self.condition,
+            status=self.status,
         )
         self.member = get_user_model().objects.create_user(
             username="member", email="member@kwenamusic.co.za", password="secret123"

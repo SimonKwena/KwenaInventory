@@ -14,7 +14,7 @@ Usage::
 from django.core.management.base import BaseCommand
 from django.db import transaction as db_transaction
 
-from inventory.models import Item
+from inventory.models import StockEntry
 from inventory.services import _resolve_status
 
 
@@ -30,7 +30,7 @@ def derived_quantity_out(item):
 
 
 class Command(BaseCommand):
-    help = "Recompute item.quantity_out and status from the transaction history."
+    help = "Recompute stock entry quantity_out and status from the transaction history."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -42,7 +42,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         check_only = options["check"]
         fixed = 0
-        for item in Item.objects.all().select_related("status"):
+        for item in StockEntry.objects.all().select_related("status"):
             fresh = derived_quantity_out(item)
             if fresh == item.quantity_out and item.status == _resolve_status(item):
                 continue
@@ -57,17 +57,17 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.WARNING(
                     f"{'WOULD FIX' if check_only else 'FIXED'} "
-                    f"item {item.pk} ({item.name!r}): "
+                    f"stock entry {item.pk} ({item.name!r}): "
                     f"quantity_out {old_out} -> {fresh}, "
                     f"status {old_status} -> "
                     f"{item.status.name if item.status else None}"
                 )
             )
         if fixed == 0:
-            self.stdout.write(self.style.SUCCESS("All items consistent. Nothing to do."))
+            self.stdout.write(self.style.SUCCESS("All stock entries consistent. Nothing to do."))
         elif check_only:
             self.stdout.write(
-                self.style.WARNING(f"{fixed} item(s) out of sync (not modified, --check used).")
+                self.style.WARNING(f"{fixed} stock entry(ies) out of sync (not modified, --check used).")
             )
         else:
-            self.stdout.write(self.style.SUCCESS(f"Recomputed and corrected {fixed} item(s)."))
+            self.stdout.write(self.style.SUCCESS(f"Recomputed and corrected {fixed} stock entry(ies)."))

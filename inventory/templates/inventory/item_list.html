@@ -93,11 +93,11 @@
                 </thead>
                 <tbody>
                     {% for item in items %}
-                        <tr class="all-item-row" data-location="{{ item.location.name }}" data-category="{{ item.category }}" data-available="{{ item.quantity_available }}" data-search="{{ item.name }} {{ item.sku }} {{ item.category }} {{ item.subcategory }}">
+                        <tr class="all-item-row" data-location="{{ item.location.name }}" data-category="{{ item.catalog_item.category }}" data-available="{{ item.quantity_available }}" data-search="{{ item.name }} {{ item.catalog_item.sku }} {{ item.catalog_item.category }} {{ item.catalog_item.subcategory }}">
                             <td>
                                     <a class="text-link" href="{% url 'inventory:item_detail' item.pk %}">{{ item.name }}</a>
                             </td>
-                            <td>{{ item.category }}{% if item.subcategory %} &middot; {{ item.subcategory }}{% endif %}</td>
+                            <td>{{ item.catalog_item.category }}{% if item.catalog_item.subcategory %} &middot; {{ item.catalog_item.subcategory }}{% endif %}</td>
                             <td>{{ item.location.name }}</td>
                             <td>{{ item.condition.name|default:"&mdash;" }}</td>
                             <td>{{ item.quantity_total }}</td>

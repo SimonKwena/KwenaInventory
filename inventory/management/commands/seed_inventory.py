@@ -3,7 +3,7 @@ from pathlib import Path
 import openpyxl
 from django.core.management.base import BaseCommand
 
-from inventory.models import ConditionOption, Item, Location, StatusOption
+from inventory.models import CatalogItem, ConditionOption, Location, StatusOption, StockEntry
 
 
 def categorize_item(name):
@@ -69,16 +69,23 @@ class Command(BaseCommand):
                 ("XLR - 15M", "Balanced audio cable", "XLR-15M", 5, 5, 0, stage, "Cables", "Audio"),
             ]
             for name, description, sku, total, available, out, location, category, subcategory in fallback_items:
-                Item.objects.update_or_create(
+                catalog, _ = CatalogItem.objects.update_or_create(
                     name=name,
                     defaults={
                         "description": description,
                         "sku": sku,
-                        "quantity_total": total,
-                        "quantity_out": out,
-                        "location": location,
                         "category": category,
                         "subcategory": subcategory,
+                        "is_active": True,
+                    },
+                )
+                StockEntry.objects.update_or_create(
+                    catalog_item=catalog,
+                    location=location,
+                    defaults={
+                        "quantity_total": total,
+                        "quantity_out": out,
+                        "quantity_maintenance": 0,
                         "condition": ConditionOption.objects.filter(name="Working").first(),
                         "status": StatusOption.objects.filter(name="Available").first(),
                         "is_active": True,
@@ -114,16 +121,23 @@ class Command(BaseCommand):
                     return 0
 
             category, subcategory, description = categorize_item(name)
-            item, created = Item.objects.update_or_create(
+            catalog, created = CatalogItem.objects.update_or_create(
                 name=name,
                 defaults={
                     "description": description or f"Imported from {workbook_path.name}",
                     "sku": name.lower().replace(" ", "-").replace("/", "-"),
-                    "quantity_total": parse_value(total),
-                    "quantity_out": parse_value(out),
-                    "location": gear_room,
                     "category": category,
                     "subcategory": subcategory,
+                    "is_active": True,
+                },
+            )
+            StockEntry.objects.update_or_create(
+                catalog_item=catalog,
+                location=gear_room,
+                defaults={
+                    "quantity_total": parse_value(total),
+                    "quantity_out": parse_value(out),
+                    "quantity_maintenance": 0,
                     "condition": condition,
                     "status": status,
                     "is_active": True,

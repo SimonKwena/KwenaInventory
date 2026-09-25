@@ -357,7 +357,7 @@
                     <tr>
                         <td class="slip-doc-qty">{{ line.quantity }}</td>
                         <td>{{ line.item.name }}</td>
-                        <td>{{ line.item.sku|default:"&mdash;" }}</td>
+                        <td>{{ line.item.catalog_item.sku|default:"&mdash;" }}</td>
                         <td>{% if line.location %}{{ line.location.name }}{% else %}&mdash;{% endif %}</td>
                         <td>{% if line.condition %}{{ line.condition.name }}{% elif line.item_id in return_conditions %}{{ return_conditions|get_item:line.item_id }}{% else %}&mdash;{% endif %}</td>
                     </tr>
@@ -502,7 +502,7 @@
                         {% for line in slip.items.all %}
                         <tr style="border-bottom:1px solid #e8e8e8;">
                             <td style="padding:6px 10px;font-weight:600;">{{ line.item.name }}</td>
-                            <td style="padding:6px 10px;color:#555;font-size:0.8rem;">{{ line.item.sku|default:"&mdash;" }}</td>
+                            <td style="padding:6px 10px;color:#555;font-size:0.8rem;">{{ line.item.catalog_item.sku|default:"&mdash;" }}</td>
                             <td style="padding:6px 10px;color:#444;">{% if line.location %}{{ line.location.name }}{% else %}&mdash;{% endif %}</td>
                             <td style="padding:6px 10px;font-weight:700;text-align:center;">{{ line.quantity }}</td>
                             <td style="padding:6px 10px;text-align:center;"><input type="checkbox" disabled style="width:16px;height:16px;cursor:pointer;"></td>

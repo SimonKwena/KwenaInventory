@@ -31,15 +31,16 @@ from .forms import (
 )
 from .models import (
     Announcement,
+    CatalogItem,
     ConditionOption,
     GuestProfile,
-    Item,
     Location,
     Maintenance,
     Notification,
     OneSignalPlayer,
     Request,
     RequestItem,
+    StockEntry,
     StockTake,
     StockTakeItem,
     Transaction,
@@ -88,22 +89,25 @@ def landing(request):
 def item_lookup(request):
     sku = (request.GET.get("sku") or "").strip()
     pk = (request.GET.get("pk") or "").strip()
-    item = None
-    if sku:
-        item = Item.objects.filter(sku__iexact=sku, is_active=True).first()
-    elif pk:
-        item = Item.objects.filter(pk=pk, is_active=True).first()
-    # Non-staff may only look up items in locations they are allowed to see.
-    if item and not request.user.is_staff and not location_is_visible(request.user, item.location):
-        item = None
-    if not item:
+    stock_entry = None
+    if pk:
+        stock_entry = StockEntry.objects.filter(pk=pk, is_active=True).select_related("catalog_item", "location").first()
+    elif sku:
+        stock_entry = (
+            StockEntry.objects.filter(catalog_item__sku__iexact=sku, is_active=True)
+            .select_related("catalog_item", "location")
+            .first()
+        )
+    if stock_entry and not request.user.is_staff and not location_is_visible(request.user, stock_entry.location):
+        stock_entry = None
+    if not stock_entry:
         return JsonResponse({"found": False})
     return JsonResponse({
         "found": True,
-        "id": item.pk,
-        "sku": item.sku or "",
-        "name": item.name,
-        "location_id": item.location_id,
+        "id": stock_entry.pk,
+        "sku": stock_entry.catalog_item.sku or "",
+        "name": stock_entry.name,
+        "location_id": stock_entry.location_id,
     })
 
 
@@ -122,17 +126,17 @@ def _cart_items(request):
             continue
         resolved = []
         for entry in entries:
-            item = Item.objects.filter(pk=entry.get("item_id"), is_active=True).first()
-            if not item:
+            stock_entry = StockEntry.objects.filter(pk=entry.get("item_id"), is_active=True).select_related("catalog_item", "location").first()
+            if not stock_entry:
                 continue
             resolved.append(
                 {
-                    "item_id": item.pk,
-                    "name": item.name,
-                    "location": item.location.name if item.location else "",
-                    "location_id": item.location.pk if item.location else "",
+                    "item_id": stock_entry.pk,
+                    "name": stock_entry.name,
+                    "location": stock_entry.location.name if stock_entry.location else "",
+                    "location_id": stock_entry.location.pk if stock_entry.location else "",
                     "quantity": max(1, int(entry.get("quantity") or 1)),
-                    "quantity_available": item.quantity_available,
+                    "quantity_available": stock_entry.quantity_available,
                 }
             )
         if resolved:
@@ -292,7 +296,7 @@ def cart_add(request):
     except (TypeError, ValueError):
         messages.error(request, "That item could not be found.")
         return redirect("inventory:catalog")
-    if not Item.objects.filter(pk=item_id, is_active=True).exists():
+    if not StockEntry.objects.filter(pk=item_id, is_active=True).exists():
         messages.error(request, "That item could not be found.")
         return redirect("inventory:catalog")
     try:
@@ -369,10 +373,10 @@ def home(request):
         return redirect("inventory:teacher_home")
 
     item_qs = (
-        Item.objects.filter(is_active=True)
+        StockEntry.objects.filter(is_active=True)
         .filter(location__in=visible_locations(request.user))
         .select_related("location", "status")
-        .order_by("category", "subcategory", "name")
+        .order_by("catalog_item__category", "catalog_item__subcategory", "catalog_item__name")
     )
     locations = visible_locations(request.user)
     workspace_access = user_has_workspace_access(request.user)
@@ -430,10 +434,10 @@ def teacher_home(request):
         return redirect("inventory:home")
 
     item_qs = (
-        Item.objects.filter(is_active=True)
+        StockEntry.objects.filter(is_active=True)
         .filter(location__in=visible_locations(request.user))
         .select_related("location", "status")
-        .order_by("category", "subcategory", "name")
+        .order_by("catalog_item__category", "catalog_item__subcategory", "catalog_item__name")
     )
     locations = visible_locations(request.user)
     workspace_access = user_has_workspace_access(request.user)
@@ -497,10 +501,10 @@ def staff_home(request):
     has_active_gear = bool(borrowed_items)
     active_loans = get_user_active_loans(request.user)
     item_qs = (
-        Item.objects.filter(is_active=True)
+        StockEntry.objects.filter(is_active=True)
         .filter(location__in=locations)
         .select_related("location", "status")
-        .order_by("category", "subcategory", "name")
+        .order_by("catalog_item__category", "catalog_item__subcategory", "catalog_item__name")
     )
     items = list(item_qs)
     for item in items:
@@ -529,9 +533,9 @@ def staff_home(request):
 def catalog(request):
     q = (request.GET.get("q") or "").strip()
     item_qs = (
-        Item.objects.filter(is_active=True)
+        StockEntry.objects.filter(is_active=True)
         .select_related("location", "status")
-        .order_by("category", "subcategory", "name")
+        .order_by("catalog_item__category", "catalog_item__subcategory", "catalog_item__name")
     )
     if not request.user.is_staff:
         item_qs = item_qs.filter(location__in=visible_locations(request.user))
@@ -572,7 +576,7 @@ def catalog_stock(request):
     re-rendering the entire product grid."""
     ids = request.GET.get("ids", "")
     id_list = [i.strip() for i in ids.split(",") if i.strip().isdigit()]
-    items = Item.objects.filter(pk__in=id_list).only("pk", "quantity_total", "quantity_out", "quantity_maintenance")
+    items = StockEntry.objects.filter(pk__in=id_list).only("pk", "quantity_total", "quantity_out", "quantity_maintenance")
     data = {}
     for item in items:
         data[str(item.pk)] = {
@@ -596,17 +600,17 @@ def cart(request):
             continue
         resolved = []
         for entry in entries:
-            item = Item.objects.filter(pk=entry.get("item_id"), is_active=True).first()
-            if not item:
+            stock_entry = StockEntry.objects.filter(pk=entry.get("item_id"), is_active=True).select_related("catalog_item", "location").first()
+            if not stock_entry:
                 continue
             resolved.append(
                 {
-                    "item_id": item.pk,
-                    "name": item.name,
-                    "location": item.location.name if item.location else "",
-                    "location_id": item.location.pk if item.location else "",
+                    "item_id": stock_entry.pk,
+                    "name": stock_entry.name,
+                    "location": stock_entry.location.name if stock_entry.location else "",
+                    "location_id": stock_entry.location.pk if stock_entry.location else "",
                     "quantity": max(1, int(entry.get("quantity") or 1)),
-                    "quantity_available": item.quantity_available,
+                    "quantity_available": stock_entry.quantity_available,
                 }
             )
         if resolved:
@@ -658,7 +662,7 @@ def cart(request):
                 except (TypeError, ValueError):
                     qty = entry["quantity"]
                 item_entries.append({
-                    "item": Item.objects.get(pk=pk),
+                    "item": StockEntry.objects.get(pk=pk),
                     "quantity": qty,
                     "location_id": entry.get("location_id"),
                     "action": action_val,
@@ -981,8 +985,8 @@ def process_transaction(request):
     item_entries = []
     if asset_tag.strip():
         try:
-            item = Item.objects.get(sku__iexact=asset_tag.strip())
-        except Item.DoesNotExist:
+            item = StockEntry.objects.get(sku__iexact=asset_tag.strip())
+        except StockEntry.DoesNotExist:
             messages.error(request, "Asset tag not found. Please check the SKU and try again.")
             return redirect("inventory:home")
         quantities = request.POST.getlist("quantities")
@@ -1000,8 +1004,8 @@ def process_transaction(request):
             if not item_id.strip():
                 continue
             try:
-                item = Item.objects.get(pk=int(item_id))
-            except (ValueError, Item.DoesNotExist):
+                item = StockEntry.objects.get(pk=int(item_id))
+            except (ValueError, StockEntry.DoesNotExist):
                 messages.error(request, "Please choose valid items for the submission.")
                 return redirect("inventory:home")
             try:
@@ -1160,8 +1164,8 @@ def scan_item(request):
     expected_return = form.cleaned_data.get("expected_return")
 
     try:
-        item = Item.objects.get(sku__iexact=asset_tag)
-    except Item.DoesNotExist:
+        item = StockEntry.objects.get(catalog_item__sku__iexact=asset_tag)
+    except StockEntry.DoesNotExist:
         messages.error(request, "Asset tag not found. Please check the SKU and try again.")
         return redirect("inventory:home")
 
@@ -1250,8 +1254,8 @@ def return_by_code(request):
                 if not item_id.strip():
                     continue
                 try:
-                    item = Item.objects.get(pk=int(item_id))
-                except (ValueError, Item.DoesNotExist):
+                    item = StockEntry.objects.get(pk=int(item_id))
+                except (ValueError, StockEntry.DoesNotExist):
                     missing.append(item_id)
                     continue
                 qty = 1
@@ -1365,7 +1369,7 @@ def announcement_delete(request, pk):
 
 @user_passes_test(lambda user: user.is_staff)
 def dashboard(request):
-    items = Item.objects.select_related("location").all().order_by("location__name", "name")
+    items = StockEntry.objects.select_related("catalog_item", "location").all().order_by("location__name", "catalog_item__name")
     total_items = items.count()
     total_available = sum(item.quantity_available for item in items)
     total_out = sum(item.quantity_out for item in items)
@@ -1375,7 +1379,7 @@ def dashboard(request):
     pending_returns = []
 
     live_txns = []
-    for item in Item.objects.filter(quantity_out__gt=0).select_related("location"):
+    for item in StockEntry.objects.filter(quantity_out__gt=0).select_related("catalog_item", "location"):
         live_out = item.quantity_out
         for txn in item.transactions.filter(
             transaction_type="check_out", approval_status="approved", voided="none"
@@ -2182,16 +2186,15 @@ def request_edit(request, pk):
 @login_required
 @ensure_csrf_cookie
 def item_detail(request, pk):
-    item = Item.objects.select_related("location").get(pk=pk)
-    # Members may only open items in locations they are allowed to see.
-    if not request.user.is_staff and not location_is_visible(request.user, item.location):
+    stock_entry = StockEntry.objects.select_related("catalog_item", "location").get(pk=pk)
+    if not request.user.is_staff and not location_is_visible(request.user, stock_entry.location):
         messages.error(request, "You do not have access to that location.")
         return redirect("inventory:catalog")
     return render(
         request,
         "inventory/item_detail.html",
         {
-            "item": item,
+            "item": stock_entry,
             "can_check_out": can_check_out(request.user),
             "cart_counts": _cart_counts(request),
         },
@@ -2201,9 +2204,9 @@ def item_detail(request, pk):
 @user_passes_test(lambda user: user.is_staff)
 def item_list(request):
     items = (
-        Item.objects.select_related("location", "condition", "status")
+        StockEntry.objects.select_related("catalog_item", "location", "condition", "status")
         .all()
-        .order_by("category", "subcategory", "name")
+        .order_by("catalog_item__category", "catalog_item__subcategory", "catalog_item__name")
     )
 
     total_items = items.count()
@@ -2212,7 +2215,7 @@ def item_list(request):
     maintenance_count = Maintenance.objects.filter(completed_at__isnull=True).count()
     locations = Location.objects.filter(is_active=True)
     categories = list(
-        Item.objects.exclude(category__isnull=True)
+        CatalogItem.objects.exclude(category__isnull=True)
         .exclude(category="")
         .values_list("category", flat=True)
         .distinct()
@@ -2240,29 +2243,63 @@ def item_create(request):
         form = ItemForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
             sku = (form.cleaned_data.get("sku") or "").strip()
-            existing = Item.objects.filter(sku__iexact=sku).first() if sku else None
-            if existing:
-                added = form.cleaned_data.get("quantity_total") or 0
-                existing.quantity_total = (existing.quantity_total or 0) + added
-                for field in ("category", "subcategory", "description", "location"):
-                    value = form.cleaned_data.get(field)
-                    if value not in (None, ""):
-                        setattr(existing, field, value)
-                if form.cleaned_data.get("condition"):
-                    existing.condition = form.cleaned_data["condition"]
-                if form.cleaned_data.get("status"):
-                    existing.status = form.cleaned_data["status"]
-                if request.FILES.get("image"):
-                    existing.image = request.FILES["image"]
-                existing.save()
-                messages.success(
-                    request,
-                    f"Restocked {existing.name}: +{added} unit(s). New total is {existing.quantity_total}.",
-                )
-                return redirect("inventory:item_detail", pk=existing.pk)
-            item = form.save()
-            messages.success(request, f"Added {item.name}. A QR code was generated automatically.")
-            return redirect("inventory:item_detail", pk=item.pk)
+            catalog = CatalogItem.objects.filter(sku__iexact=sku).first() if sku else None
+            location = form.cleaned_data.get("location")
+            added = form.cleaned_data.get("quantity_total") or 0
+            image = request.FILES.get("image")
+
+            if catalog:
+                stock_entry = StockEntry.objects.filter(catalog_item=catalog, location=location).first()
+                if stock_entry:
+                    stock_entry.quantity_total = (stock_entry.quantity_total or 0) + added
+                    for field in ("quantity_out", "condition", "status"):
+                        value = form.cleaned_data.get(field)
+                        if value not in (None, ""):
+                            setattr(stock_entry, field, value)
+                    if image:
+                        stock_entry.catalog_item.image = image
+                        stock_entry.catalog_item.save(update_fields=["image"])
+                    stock_entry.save()
+                    messages.success(
+                        request,
+                        f"Restocked {stock_entry.name} @ {stock_entry.location.name}: +{added} unit(s). New total is {stock_entry.quantity_total}.",
+                    )
+                    return redirect("inventory:item_detail", pk=stock_entry.pk)
+                else:
+                    stock_entry = StockEntry.objects.create(
+                        catalog_item=catalog,
+                        location=location,
+                        quantity_total=added,
+                        quantity_out=form.cleaned_data.get("quantity_out") or 0,
+                        quantity_maintenance=0,
+                        condition=form.cleaned_data.get("condition"),
+                        status=form.cleaned_data.get("status"),
+                    )
+                    if image:
+                        catalog.image = image
+                        catalog.save(update_fields=["image"])
+                    messages.success(request, f"Added {stock_entry.name} @ {stock_entry.location.name}. A QR code was generated automatically.")
+                    return redirect("inventory:item_detail", pk=stock_entry.pk)
+
+            catalog = CatalogItem.objects.create(
+                name=form.cleaned_data.get("name"),
+                description=form.cleaned_data.get("description") or "",
+                category=form.cleaned_data.get("category") or "",
+                subcategory=form.cleaned_data.get("subcategory") or "",
+                sku=sku,
+                image=image,
+            )
+            stock_entry = StockEntry.objects.create(
+                catalog_item=catalog,
+                location=location,
+                quantity_total=added,
+                quantity_out=form.cleaned_data.get("quantity_out") or 0,
+                quantity_maintenance=0,
+                condition=form.cleaned_data.get("condition"),
+                status=form.cleaned_data.get("status"),
+            )
+            messages.success(request, f"Added {stock_entry.name} @ {stock_entry.location.name}. A QR code was generated automatically.")
+            return redirect("inventory:item_detail", pk=stock_entry.pk)
         messages.error(request, "Please correct the errors below.")
     else:
         form = ItemForm(user=request.user)
@@ -2271,43 +2308,58 @@ def item_create(request):
 
 @user_passes_test(is_superadmin)
 def item_edit(request, pk):
-    item = get_object_or_404(Item, pk=pk)
+    stock_entry = get_object_or_404(StockEntry, pk=pk)
+    catalog = stock_entry.catalog_item
     if request.method == "POST":
-        form = ItemForm(request.POST, request.FILES, instance=item, user=request.user)
+        form = ItemForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
             sku = (form.cleaned_data.get("sku") or "").strip()
-            target = Item.objects.filter(sku__iexact=sku).exclude(pk=item.pk).first() if sku else None
-            if target:
-                if item.transactions.exists():
+            target_catalog = CatalogItem.objects.filter(sku__iexact=sku).exclude(pk=catalog.pk).first() if sku else None
+            if target_catalog:
+                target_stock = StockEntry.objects.filter(catalog_item=target_catalog, location=stock_entry.location).first()
+                if target_stock and stock_entry.transactions.exists():
                     messages.error(
                         request,
-                        "Cannot merge: this item has transaction history. Update the target item directly instead.",
+                        "Cannot merge: this stock entry has transaction history. Update the target directly instead.",
                     )
-                    return render(request, "inventory/item_form.html", {"form": form, "item": item, "is_edit": True})
-                target.quantity_total = (target.quantity_total or 0) + (item.quantity_total or 0)
-                target.quantity_out = (target.quantity_out or 0) + (item.quantity_out or 0)
-                for field in ("category", "subcategory", "description", "location"):
-                    if not getattr(target, field):
-                        value = form.cleaned_data.get(field)
-                        if value not in (None, ""):
-                            setattr(target, field, value)
-                if form.cleaned_data.get("condition") and not target.condition:
-                    target.condition = form.cleaned_data["condition"]
-                if form.cleaned_data.get("status") and not target.status:
-                    target.status = form.cleaned_data["status"]
-                if request.FILES.get("image") and not target.image:
-                    target.image = request.FILES["image"]
-                target.save()
-                item.delete()
-                messages.success(request, f"Merged into {target.name}. Combined total is {target.quantity_total}.")
-                return redirect("inventory:item_detail", pk=target.pk)
-            form.save()
-            messages.success(request, f"Updated {item.name}.")
-            return redirect("inventory:item_detail", pk=item.pk)
+                    return render(request, "inventory/item_form.html", {"form": form, "item": stock_entry, "is_edit": True})
+                if target_stock:
+                    target_stock.quantity_total = (target_stock.quantity_total or 0) + (stock_entry.quantity_total or 0)
+                    target_stock.quantity_out = (target_stock.quantity_out or 0) + (stock_entry.quantity_out or 0)
+                    for field in ("quantity_maintenance", "condition", "status"):
+                        if not getattr(target_stock, field):
+                            value = form.cleaned_data.get(field)
+                            if value not in (None, ""):
+                                setattr(target_stock, field, value)
+                    if form.cleaned_data.get("location") and not target_stock.location:
+                        target_stock.location = form.cleaned_data["location"]
+                    target_stock.save()
+                    stock_entry.delete()
+                    messages.success(request, f"Merged into {target_stock.name}. Combined total is {target_stock.quantity_total}.")
+                    return redirect("inventory:item_detail", pk=target_stock.pk)
+                messages.error(request, "Target catalog item has no stock entry at this location.")
+                return render(request, "inventory/item_form.html", {"form": form, "item": stock_entry, "is_edit": True})
+
+            catalog.name = form.cleaned_data.get("name") or catalog.name
+            catalog.description = form.cleaned_data.get("description") or catalog.description
+            catalog.category = form.cleaned_data.get("category") or catalog.category
+            catalog.subcategory = form.cleaned_data.get("subcategory") or catalog.subcategory
+            catalog.sku = sku
+            if request.FILES.get("image"):
+                catalog.image = request.FILES["image"]
+            catalog.save(update_fields=["name", "description", "category", "subcategory", "sku", "image"])
+
+            for field in ("quantity_total", "quantity_out", "quantity_maintenance", "condition", "status", "location"):
+                value = form.cleaned_data.get(field)
+                if value not in (None, ""):
+                    setattr(stock_entry, field, value)
+            stock_entry.save()
+            messages.success(request, f"Updated {stock_entry.name}.")
+            return redirect("inventory:item_detail", pk=stock_entry.pk)
         messages.error(request, "Please correct the errors below.")
     else:
-        form = ItemForm(instance=item, user=request.user)
-    return render(request, "inventory/item_form.html", {"form": form, "item": item, "is_edit": True})
+        form = ItemForm(instance=stock_entry, user=request.user)
+    return render(request, "inventory/item_form.html", {"form": form, "item": stock_entry, "is_edit": True})
 
 
 @user_passes_test(lambda user: user.is_staff or role_of(user) == ROLE_TEACHER)
@@ -2319,12 +2371,12 @@ def maintenance_list(request):
         records_qs = records_qs.filter(reported_by=request.user)
     open_records = (
         records_qs.filter(completed_at__isnull=True)
-        .select_related("item", "item__location", "reported_by")
+        .select_related("item", "item__catalog_item", "reported_by")
         .order_by("started_at")
     )
     completed_records = (
         records_qs.filter(completed_at__isnull=False)
-        .select_related("item", "item__location", "completed_by")
+        .select_related("item", "item__catalog_item", "completed_by")
         .order_by("-completed_at")[:20]
     )
     now = timezone.now()
@@ -2337,11 +2389,11 @@ def maintenance_list(request):
         except (ValueError, TypeError):
             pass
     maintenance_items = (
-        Item.objects.filter(maintenance_records__completed_at__isnull=True)
+        StockEntry.objects.filter(maintenance_records__completed_at__isnull=True)
         .filter(quantity_maintenance__gt=0)
-        .select_related("location", "condition", "status")
+        .select_related("catalog_item", "location", "condition", "status")
         .distinct()
-        .order_by("category", "subcategory", "name")
+        .order_by("catalog_item__category", "catalog_item__subcategory", "catalog_item__name")
     )
     return render(
         request,
@@ -2360,7 +2412,7 @@ def maintenance_list(request):
 @login_required
 def maintenance_detail(request, pk):
     record = get_object_or_404(
-        Maintenance.objects.select_related("item", "item__location", "reported_by", "completed_by"),
+        Maintenance.objects.select_related("item", "item__catalog_item", "reported_by", "completed_by"),
         pk=pk,
     )
     # Teachers may only view their own submissions; staff may view any.
@@ -2708,8 +2760,8 @@ def stock_take_create(request):
                 if not item_id.strip():
                     continue
                 try:
-                    item = Item.objects.get(pk=int(item_id))
-                except (ValueError, Item.DoesNotExist):
+                    item = StockEntry.objects.get(pk=int(item_id))
+                except (ValueError, StockEntry.DoesNotExist):
                     continue
                 counted = 1
                 if index < len(counted_quantities) and counted_quantities[index].strip():
@@ -2726,7 +2778,7 @@ def stock_take_create(request):
                 )
             stock_take.status = "complete"
             stock_take.save()
-            # Adjust item quantities to match the counted values.
+            # Adjust stock entry quantities to match the counted values.
             for sti in stock_take.items.all():
                 diff = sti.counted_quantity - sti.expected_quantity
                 if diff != 0:
@@ -2749,7 +2801,7 @@ def stock_take_create(request):
     items = []
     if location_id:
         try:
-            items = Item.objects.filter(location_id=location_id, is_active=True).order_by("name")
+            items = StockEntry.objects.filter(location_id=location_id, is_active=True).select_related("catalog_item").order_by("catalog_item__name")
         except ValueError:
             pass
     return render(
@@ -2790,9 +2842,9 @@ def stock_take_print(request):
     location_id = request.GET.get("location", "")
 
     items = (
-        Item.objects.select_related("location", "condition", "status")
+        StockEntry.objects.select_related("catalog_item", "location", "condition", "status")
         .filter(is_active=True)
-        .order_by("location__name", "name")
+        .order_by("location__name", "catalog_item__name")
     )
 
     selected_location = None

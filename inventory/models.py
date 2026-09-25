@@ -188,46 +188,70 @@ class Location(models.Model):
         return self.name
 
 
-class Item(models.Model):
+class CatalogItem(models.Model):
+    """Global definition of an item type, independent of where it is stored.
+
+    A single catalog item can have many :class:`StockEntry` records, one per
+    location/room. This replaces the old ``Item`` model's identity fields
+    (name, SKU, description, category, image) so those attributes are no longer
+    duplicated per room.
+    """
+
     name = models.CharField(max_length=250)
     description = models.TextField(blank=True)
     category = models.CharField(max_length=100, blank=True)
     subcategory = models.CharField(max_length=100, blank=True)
     sku = models.CharField(max_length=100, blank=True, db_index=True)
-    quantity_total = models.PositiveIntegerField(default=0)
-    quantity_out = models.PositiveIntegerField(default=0)
-    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="items")
-    condition = models.ForeignKey(ConditionOption, on_delete=models.SET_NULL, blank=True, null=True, related_name="items")
-    status = models.ForeignKey(StatusOption, on_delete=models.SET_NULL, blank=True, null=True, related_name="items")
-    quantity_maintenance = models.PositiveIntegerField(default=0)
     image = models.ImageField(upload_to="items/", blank=True, null=True)
-    qr_image = models.ImageField(upload_to="qr_codes/", blank=True, null=True)
-    qr_code = models.CharField(max_length=255, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ["name"]
         constraints = [
-            # Every scan/lookup path resolves items by SKU with .get(sku__iexact=...),
-            # which raises an unhandled error the moment two items share a code.
-            # Blank SKUs are exempt (many items may legitimately have none yet).
-            # NOTE: SQLite's UNIQUE is case-sensitive, so this catches exact
-            # duplicates; the iexact lookups in views are an additional, belt-
-            # and-braces guard against near-duplicates entered with different case.
             models.UniqueConstraint(
                 fields=["sku"],
                 condition=~models.Q(sku=""),
-                name="unique_nonblank_item_sku",
+                name="unique_nonblank_catalog_item_sku",
             ),
         ]
 
     def __str__(self):
         return self.name
 
+
+class StockEntry(models.Model):
+    """Per-room stock record for a :class:`CatalogItem`.
+
+    Each row tracks how many units of a catalog item exist at a specific
+    location, plus their condition, status, and QR code.
+    """
+
+    catalog_item = models.ForeignKey(CatalogItem, on_delete=models.PROTECT, related_name="stock_entries")
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="stock_entries")
+    quantity_total = models.PositiveIntegerField(default=0)
+    quantity_out = models.PositiveIntegerField(default=0)
+    quantity_maintenance = models.PositiveIntegerField(default=0)
+    condition = models.ForeignKey(ConditionOption, on_delete=models.SET_NULL, blank=True, null=True, related_name="stock_entries")
+    status = models.ForeignKey(StatusOption, on_delete=models.SET_NULL, blank=True, null=True, related_name="stock_entries")
+    qr_image = models.ImageField(upload_to="qr_codes/", blank=True, null=True)
+    qr_code = models.CharField(max_length=255, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["catalog_item__name", "location__name"]
+        unique_together = [("catalog_item", "location")]
+
+    def __str__(self):
+        return f"{self.catalog_item.name} @ {self.location.name}"
+
+    @property
+    def name(self):
+        return self.catalog_item.name
+
     @property
     def quantity_available(self):
-        # Single source of truth: total minus what is currently out or in maintenance.
         return max(0, self.quantity_total - self.quantity_out - self.quantity_maintenance)
 
     def save(self, *args, **kwargs):
@@ -236,30 +260,21 @@ class Item(models.Model):
         expected_name = f"qr_codes/qr_{self.pk}.png"
         current = self.qr_image.name if self.qr_image else ""
         if current != expected_name:
-            # Encode a host the scanner can reach: prefer the LAN IP (so a phone
-            # on the same network opens the item), otherwise the Site domain.
             host = _lan_host() or Site.objects.get_current().domain
             qr_url = f"https://{host}/items/{self.pk}/"
-            if self.sku:
-                qr_url += f"?sku={self.sku}"
+            if self.catalog_item.sku:
+                qr_url += f"?sku={self.catalog_item.sku}"
             qr_image = qrcode.make(qr_url)
             buffer = BytesIO()
-            # qrcode.make() returns a qrcode image wrapper, not a raw PIL image;
-            # .save on it writes a valid PNG to the buffer.
             qr_image.save(buffer, format="PNG")
             content = ContentFile(buffer.getvalue())
 
             storage = self.qr_image.storage
-            # Remove any stale qr file for this item (old name or suffixed
-            # duplicates) so we don't leak files or point at the wrong one.
             if current and storage.exists(current):
                 storage.delete(current)
             if storage.exists(expected_name):
                 storage.delete(expected_name)
 
-            # Save under the stable, predictable name. storage.save respects the
-            # given name when the file does not already exist, so we pre-delete
-            # above to guarantee no random "_XXXX" suffix is appended.
             saved_name = storage.save(expected_name, content, max_length=255)
             self.qr_image.name = saved_name
             self.qr_code = self.qr_image.url
@@ -394,7 +409,7 @@ class Transaction(models.Model):
         ("voided", "Voided"),
     ]
 
-    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="transactions")
+    item = models.ForeignKey("StockEntry", on_delete=models.PROTECT, related_name="transactions")
     user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="transactions")
     person_name = models.CharField(
         max_length=150, blank=True,
@@ -632,7 +647,7 @@ class RequestItem(models.Model):
     :class:`Transaction` when the parent request is approved."""
 
     request = models.ForeignKey(Request, on_delete=models.CASCADE, related_name="items")
-    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="request_items")
+    item = models.ForeignKey("StockEntry", on_delete=models.PROTECT, related_name="request_items")
     quantity = models.PositiveIntegerField(default=1)
     location = models.ForeignKey(
         Location, on_delete=models.PROTECT, related_name="request_items", blank=True, null=True
@@ -669,7 +684,7 @@ class Maintenance(models.Model):
     maintenance; completing it returns the item to available stock.
     """
 
-    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="maintenance_records")
+    item = models.ForeignKey("StockEntry", on_delete=models.CASCADE, related_name="maintenance_records")
     location = models.ForeignKey(
         Location, on_delete=models.PROTECT, related_name="maintenance_records", blank=True, null=True,
         help_text="Where the item is while out for service (defaults to the item's location).",
@@ -772,13 +787,13 @@ class StockTakeItem(models.Model):
     single item at the time of the stock take."""
 
     stock_take = models.ForeignKey(StockTake, on_delete=models.CASCADE, related_name="items")
-    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="stock_take_items")
+    item = models.ForeignKey("StockEntry", on_delete=models.PROTECT, related_name="stock_take_items")
     counted_quantity = models.PositiveIntegerField(default=0)
     expected_quantity = models.PositiveIntegerField(default=0)
     notes = models.TextField(blank=True)
 
     class Meta:
-        ordering = ["item__name"]
+        ordering = ["item__catalog_item__name"]
         unique_together = [("stock_take", "item")]
 
     def __str__(self):
@@ -1035,7 +1050,7 @@ def notify_request_received(request_obj):
 
     admin_title = f"New {type_label} request — slip {request_obj.reference_code}"
     admin_message = (
-        f"{request_obj.user.get_full_name() or request_obj.username} submitted a "
+        f"{request_obj.user.get_full_name() or request_obj.user.username} submitted a "
         f"{type_label} request for {summary}.\n\n"
         f"Slip code: {request_obj.reference_code}\n"
         f"Status: awaiting approval"

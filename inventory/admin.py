@@ -2,9 +2,9 @@ from django.contrib import admin
 
 from .models import (
     Announcement,
+    CatalogItem,
     ConditionOption,
     GuestProfile,
-    Item,
     Location,
     LocationRole,
     Maintenance,
@@ -12,6 +12,7 @@ from .models import (
     RequestItem,
     Role,
     StatusOption,
+    StockEntry,
     StockTake,
     StockTakeItem,
     Transaction,
@@ -55,11 +56,19 @@ class LocationRoleAdmin(admin.ModelAdmin):
     search_fields = ("location__name", "role__slug")
 
 
-@admin.register(Item)
-class ItemAdmin(admin.ModelAdmin):
-    list_display = ("name", "sku", "category", "subcategory", "location", "quantity_total", "quantity_available", "quantity_out", "is_active")
-    list_filter = ("location", "category", "subcategory", "is_active")
+@admin.register(CatalogItem)
+class CatalogItemAdmin(admin.ModelAdmin):
+    list_display = ("name", "sku", "category", "subcategory", "is_active")
+    list_filter = ("category", "subcategory", "is_active")
     search_fields = ("name", "sku", "category", "subcategory")
+
+
+@admin.register(StockEntry)
+class StockEntryAdmin(admin.ModelAdmin):
+    list_display = ("catalog_item", "location", "quantity_total", "quantity_available", "quantity_out", "condition", "status", "is_active")
+    list_filter = ("location", "condition", "status", "is_active")
+    search_fields = ("catalog_item__name", "catalog_item__sku", "location__name")
+    autocomplete_fields = ("catalog_item", "location", "condition", "status")
 
 
 @admin.register(GuestProfile)
@@ -132,7 +141,7 @@ class RequestAdmin(admin.ModelAdmin):
 class MaintenanceAdmin(admin.ModelAdmin):
     list_display = ("item", "started_at", "expected_return", "completed_at", "reported_by_name", "reported_by", "completed_by_name", "completed_by")
     list_filter = ("completed_at", "started_at")
-    search_fields = ("item__name", "reason", "notes", "reported_by_name", "completed_by_name")
+    search_fields = ("item__catalog_item__name", "reason", "notes", "reported_by_name", "completed_by_name")
     autocomplete_fields = ("item",)
 
 
@@ -147,7 +156,7 @@ class StockTakeAdmin(admin.ModelAdmin):
 class StockTakeItemAdmin(admin.ModelAdmin):
     list_display = ("stock_take", "item", "counted_quantity", "expected_quantity", "difference")
     list_filter = ("stock_take",)
-    search_fields = ("item__name", "item__sku")
+    search_fields = ("item__catalog_item__name", "item__catalog_item__sku")
 
 
 _SETTINGS_VIEW_URL = "/admin/settings-view/"

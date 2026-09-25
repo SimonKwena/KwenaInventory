@@ -64,10 +64,10 @@
             </div>
             <div class="product-grid" data-region="catalog-sections">
                 {% for item in items %}
-                    <article class="product-card" data-location="{{ item.location.name }}" data-available="{{ item.quantity_available }}" data-category="{{ item.group_label }}" data-search="{{ item.name }} {{ item.category }} {{ item.subcategory }} {{ item.type_label }}" data-item-id="{{ item.pk }}">
+                    <article class="product-card" data-location="{{ item.location.name }}" data-available="{{ item.quantity_available }}" data-category="{{ item.catalog_item.category }}" data-search="{{ item.name }} {{ item.catalog_item.category }} {{ item.catalog_item.subcategory }} {{ item.catalog_item.description }}" data-item-id="{{ item.pk }}">
                         <div class="product-card-img">
-                            {% if item.image %}
-                                <img src="{{ item.image.url }}" alt="{{ item.name }}" loading="lazy">
+                            {% if item.catalog_item.image %}
+                                <img src="{{ item.catalog_item.image.url }}" alt="{{ item.name }}" loading="lazy">
                             {% else %}
                                 <div class="product-card-placeholder">
                                     <span>{{ item.name|first|upper }}</span>
@@ -81,8 +81,8 @@
                         </div>
                         <div class="product-card-body">
                             <h3>{{ item.name }}</h3>
-                            {% if item.group_label %}
-                            <span class="product-card-category">{{ item.group_label }}</span>
+                            {% if item.catalog_item.category %}
+                            <span class="product-card-category">{{ item.catalog_item.category }}{% if item.catalog_item.subcategory %} &middot; {{ item.catalog_item.subcategory }}{% endif %}</span>
                             {% endif %}
                             <div class="product-card-footer">
                                 <span class="pill pill-neutral">{{ item.location.name }}</span>
