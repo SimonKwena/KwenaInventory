@@ -162,7 +162,7 @@
                         <tr>
                             <th style="width:36px">#</th>
                             <th>Item</th>
-                            <th>SKU</th>
+                            <th>Type</th>
                             <th class="text-right">Total</th>
                             <th class="text-right">Out</th>
                             <th class="text-right">Maint.</th>
@@ -174,7 +174,7 @@
                         <tr>
                             <td class="text-center">{{ forloop.counter }}</td>
                             <td>{{ item.name }}</td>
-                            <td class="text-muted">{{ item.sku|default:"—" }}</td>
+                            <td class="text-muted">{{ item.category|default:"—" }}</td>
                             <td class="text-right">{{ item.quantity_total }}</td>
                             <td class="text-right">{{ item.quantity_out }}</td>
                             <td class="text-right">{{ item.quantity_maintenance }}</td>
@@ -196,7 +196,7 @@
                         <tr>
                             <th style="width:36px">#</th>
                             <th>Item</th>
-                            <th>SKU</th>
+                            <th>Type</th>
                             <th class="text-right">Total</th>
                             <th class="text-right">Out</th>
                             <th class="text-right">Maint.</th>
@@ -208,7 +208,7 @@
                         <tr>
                             <td class="text-center">{{ forloop.counter }}</td>
                             <td>{{ item.name }}</td>
-                            <td class="text-muted">{{ item.sku|default:"—" }}</td>
+                            <td class="text-muted">{{ item.category|default:"—" }}</td>
                             <td class="text-right">{{ item.quantity_total }}</td>
                             <td class="text-right">{{ item.quantity_out }}</td>
                             <td class="text-right">{{ item.quantity_maintenance }}</td>
