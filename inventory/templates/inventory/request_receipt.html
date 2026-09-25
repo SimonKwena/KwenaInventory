@@ -267,7 +267,7 @@
                     <tr>
                         <td class="slip-doc-qty">{{ line.quantity }}</td>
                         <td>{{ line.item.name }}</td>
-                        <td>{{ line.item.sku|default:"—" }}</td>
+                        <td>{{ line.item.catalog_item.sku|default:"—" }}</td>
                         <td>{% if line.location %}{{ line.location.name }}{% else %}&mdash;{% endif %}</td>
                         <td>{% if line.condition %}{{ line.condition.name }}{% elif line.item_id in return_conditions %}{{ return_conditions|get_item:line.item_id }}{% elif line.item.condition %}{{ line.item.condition.name }}{% else %}&mdash;{% endif %}</td>
                     </tr>

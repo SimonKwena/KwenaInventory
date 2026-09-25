@@ -386,9 +386,9 @@ def home(request):
     total_out = sum(item.quantity_out for item in item_qs)
     items = list(item_qs)
     for item in items:
-        desc = (item.description or "").strip()
+        desc = (item.catalog_item.description or "").strip()
         item.type_label = desc if not desc.startswith("Imported from") else ""
-        item.group_label = (item.category or "").strip() or (item.type_label or "Items")
+        item.group_label = (item.catalog_item.category or "").strip() or (item.type_label or "Items")
     borrowed_items = get_user_borrowed_items(request.user)
     has_active_gear = bool(borrowed_items)
     now = timezone.now()
@@ -447,9 +447,9 @@ def teacher_home(request):
     total_out = sum(item.quantity_out for item in item_qs)
     items = list(item_qs)
     for item in items:
-        desc = (item.description or "").strip()
+        desc = (item.catalog_item.description or "").strip()
         item.type_label = desc if not desc.startswith("Imported from") else ""
-        item.group_label = (item.category or "").strip() or (item.type_label or "Items")
+        item.group_label = (item.catalog_item.category or "").strip() or (item.type_label or "Items")
     borrowed_items = get_user_borrowed_items(request.user)
     has_active_gear = bool(borrowed_items)
     now = timezone.now()
@@ -508,9 +508,9 @@ def staff_home(request):
     )
     items = list(item_qs)
     for item in items:
-        desc = (item.description or "").strip()
+        desc = (item.catalog_item.description or "").strip()
         item.type_label = desc if not desc.startswith("Imported from") else ""
-        item.group_label = (item.category or "").strip() or (item.type_label or "Items")
+        item.group_label = (item.catalog_item.category or "").strip() or (item.type_label or "Items")
 
     return render(
         request,
@@ -549,9 +549,9 @@ def catalog(request):
         )
     items = list(item_qs)
     for item in items:
-        desc = (item.description or "").strip()
+        desc = (item.catalog_item.description or "").strip()
         item.type_label = desc if not desc.startswith("Imported from") else ""
-        item.group_label = (item.category or "").strip() or (item.type_label or "Items")
+        item.group_label = (item.catalog_item.category or "").strip() or (item.type_label or "Items")
     categories = sorted({item.group_label for item in items if item.group_label})
     locations = visible_locations(request.user).order_by("name")
     return render(
