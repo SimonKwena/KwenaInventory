@@ -3237,6 +3237,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         window.OneSignalDeferred = window.OneSignalDeferred || [];
         OneSignalDeferred.push(function(OneSignal) {
+            if (OneSignal.User.PushSubscription.optedIn) {
+                setSubscribed(true);
+            }
+
             enableBtn.addEventListener('click', async function () {
                 enableBtn.disabled = true;
                 try {
