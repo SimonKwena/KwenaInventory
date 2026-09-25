@@ -29,6 +29,7 @@ from inventory.admin_views import (
     user_toggle_active_view,
     users_list_view,
 )
+from inventory.views import onesignal_sw
 
 urlpatterns = [
     path('inventory/admin/settings-view/', site_settings_view, name='site_settings'),
@@ -41,6 +42,7 @@ urlpatterns = [
     path('inventory/admin/', admin.site.urls),
     path('inventory/accounts/', include('allauth.urls')),
     path('inventory/', include('inventory.urls')),
+    path('OneSignalSDKWorker.js', onesignal_sw, name='onesignal_sw_root'),
     # Redirect the bare prefix and root to the app home.
     path('', lambda request: redirect('inventory:home')),
     path('inventory', lambda request: redirect('inventory:home')),

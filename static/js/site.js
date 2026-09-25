@@ -3223,6 +3223,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const enableBtn = document.getElementById('account-push-enable');
         const disableBtn = document.getElementById('account-push-dismiss');
         if (!enableBtn || !disableBtn) return;
+        enableBtn.disabled = false;
 
         function setSubscribed(subscribed) {
             if (subscribed) {
@@ -3236,10 +3237,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         window.OneSignalDeferred = window.OneSignalDeferred || [];
         OneSignalDeferred.push(function(OneSignal) {
-            if (OneSignal.User.PushSubscription.optedIn) {
-                setSubscribed(true);
-            }
-
             enableBtn.addEventListener('click', async function () {
                 enableBtn.disabled = true;
                 try {
