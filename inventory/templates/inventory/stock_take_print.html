@@ -131,7 +131,7 @@
                 <img src="{% static 'images/kwena-logo-black.png' %}" alt="Kwena Music">
                 <div>
                     <div class="sheet-brand-name">Kwena Music</div>
-                    <div class="sheet-brand-sub">Gear Room</div>
+                    <div class="sheet-brand-sub">Inventory</div>
                 </div>
             </div>
             <div class="sheet-meta">
@@ -226,20 +226,13 @@
         <p class="footnote">
             Kwena Music &middot; Gear, in and out &middot; Generated {{ printed_at|date:"Y-m-d H:i" }}
         </p>
-
-        <div class="no-print" style="margin-top:18px;">
-            <button type="button" onclick="window.print(); window.close();">Print</button>
-            <button type="button" onclick="window.close();">Close</button>
-        </div>
     </div>
 
     <script>
-        if (window.opener) {
-            window.addEventListener('load', function () {
-                window.focus();
-                window.print();
-            });
-        }
+        window.addEventListener('load', function () {
+            window.focus();
+            window.print();
+        });
     </script>
 </body>
 </html>

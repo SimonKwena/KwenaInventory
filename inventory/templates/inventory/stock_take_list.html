@@ -14,7 +14,7 @@
                 <a class="button-link" href="{% url 'inventory:stock_take_create' %}">New stock take</a>
                 {% endif %}
                 <a class="button-link secondary" href="{% url 'inventory:stock_take_list' %}">Stock takes</a>
-                <form method="get" action="{% url 'inventory:stock_take_print' %}" target="_blank" style="display:inline-flex;gap:8px;align-items:center;">
+                <form method="get" action="{% url 'inventory:stock_take_print' %}" target="_blank" style="display:inline-flex;gap:8px;align-items:center;" onsubmit="event.preventDefault(); var loc=this.querySelector('[name=location]').value; var url='{% url 'inventory:stock_take_print' %}?location='+encodeURIComponent(loc); var w=window.open(url,'_blank','width=900,height=800,scrollbars=yes'); if(!w){this.submit();}">
                     <select name="location" class="select-input" style="font-size:0.85rem;padding:6px 10px;">
                         <option value="">All locations</option>
                         {% for loc in locations %}
