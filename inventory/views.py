@@ -2246,7 +2246,7 @@ def item_list(request):
         request,
         "inventory/item_list.html",
         {
-            "grouped_items": grouped,
+            "grouped_items": grouped_items,
             "locations": locations,
             "categories": categories,
             "total_items": total_items,
