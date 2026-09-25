@@ -3,6 +3,7 @@ import os
 from django.core.management.base import BaseCommand
 from django.db.models import Q, Sum
 from django.utils import timezone
+from django.urls import reverse
 from datetime import timedelta
 
 from inventory.models import Notification, Reminder, Request, Transaction, send_push_notification
@@ -108,7 +109,7 @@ def send_reminder_notifications(due_soon_hours=24, cooldown_hours=24):
             title=title,
             message=message,
         )
-        send_push_notification(user, title, message)
+        send_push_notification(user, title, message, url=reverse("inventory:home"))
         Reminder.objects.create(user=user, transaction=txn, reminder_type=reminder_type)
         sent += 1
 
@@ -142,7 +143,7 @@ def send_reminder_notifications(due_soon_hours=24, cooldown_hours=24):
                     title="Book-ahead pickup reminder",
                     message=message,
                 )
-                send_push_notification(user, "Book-ahead pickup reminder", message)
+                send_push_notification(user, "Book-ahead pickup reminder", message, url=reverse("inventory:home"))
                 Reminder.objects.create(user=user, transaction=txn, reminder_type=reminder_type)
                 sent += 1
             else:
@@ -168,7 +169,7 @@ def send_reminder_notifications(due_soon_hours=24, cooldown_hours=24):
                     title="Book-ahead pickup reminder",
                     message=message,
                 )
-                send_push_notification(user, "Book-ahead pickup reminder", message)
+                send_push_notification(user, "Book-ahead pickup reminder", message, url=reverse("inventory:home"))
                 Reminder.objects.create(user=user, transaction=txn, reminder_type=reminder_type)
                 sent += 1
             else:
@@ -195,7 +196,7 @@ def send_reminder_notifications(due_soon_hours=24, cooldown_hours=24):
                     title="Book-ahead pickup reminder",
                     message=message,
                 )
-                send_push_notification(user, "Book-ahead pickup reminder", message)
+                send_push_notification(user, "Book-ahead pickup reminder", message, url=reverse("inventory:home"))
                 Reminder.objects.create(user=user, transaction=txn, reminder_type=reminder_type)
                 sent += 1
             else:
@@ -224,7 +225,7 @@ def send_reminder_notifications(due_soon_hours=24, cooldown_hours=24):
                         title="Upcoming book-ahead pickup",
                         message=admin_message,
                     )
-                    send_push_notification(admin, "Upcoming book-ahead pickup", admin_message)
+                    send_push_notification(admin, "Upcoming book-ahead pickup", admin_message, url=reverse("inventory:request_slip", kwargs={"code": req.reference_code}))
                     Reminder.objects.create(user=admin, transaction=txn, reminder_type=admin_reminder_type)
                     sent += 1
                 else:

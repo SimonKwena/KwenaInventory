@@ -13,6 +13,7 @@ from django.contrib.sites.models import Site
 from django.core.files.base import ContentFile
 from django.core.mail import send_mail
 from django.db import models
+from django.urls import reverse
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -1025,7 +1026,12 @@ def notify_request_received(request_obj):
         message=message,
     )
     notification.send_email()
-    send_push_notification(request_obj.user, title, message)
+    send_push_notification(
+        request_obj.user,
+        title,
+        message,
+        url=reverse("inventory:request_slip", kwargs={"code": request_obj.reference_code}),
+    )
 
     admin_title = f"New {type_label} request — slip {request_obj.reference_code}"
     admin_message = (
@@ -1042,7 +1048,12 @@ def notify_request_received(request_obj):
             title=admin_title,
             message=admin_message,
         )
-        send_push_notification(admin, admin_title, admin_message)
+        send_push_notification(
+            admin,
+            admin_title,
+            admin_message,
+            url=reverse("inventory:request_slip", kwargs={"code": request_obj.reference_code}),
+        )
 
     return notification
 

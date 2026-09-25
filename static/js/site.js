@@ -984,6 +984,19 @@ function gearroomInit() {
         });
     }
 
+    function syncCondAllRowVisibility() {
+        if (!condAllRow || !itemRowsContainer) {
+            return;
+        }
+        const isCheckIn = getTransactionType() === 'check_in';
+        const rows = itemRowsContainer.querySelectorAll('.item-row');
+        const show = isCheckIn && rows.length > 1;
+        condAllRow.style.display = show ? '' : 'none';
+        if (!show && condAllSelect) {
+            condAllSelect.value = '';
+        }
+    }
+
     function applyLoanToForm() {
         if (!checkinLoanField || !itemRowsContainer) {
             return;
@@ -1037,6 +1050,7 @@ function gearroomInit() {
             filterItemsByLocation(row);
         });
         syncRemoveButtonStates();
+        syncCondAllRowVisibility();
         // Fill the slip code input from the loan's reference code so the form
         // can submit (the slip code is required for member check-ins). The
         // reference code is "KW-0042"; the input accepts just the 4 digits.
@@ -1228,13 +1242,7 @@ function gearroomInit() {
             itemRowsContainer.classList.toggle('hide-condition', !isCheckIn);
             applyConditionRequirement(isCheckIn);
         }
-        if (condAllRow) {
-            const isCheckIn = action === 'check_in';
-            condAllRow.style.display = isCheckIn ? '' : 'none';
-            if (!isCheckIn && condAllSelect) {
-                condAllSelect.value = '';
-            }
-        }
+        syncCondAllRowVisibility();
         // The staff slip-code input shows only for check-out / check-in actions.
         if (slipInputRow) {
             slipInputRow.style.display = (action === 'check_out' || action === 'check_in') ? '' : 'none';
@@ -1326,6 +1334,7 @@ function gearroomInit() {
                 }
                 row.remove();
                 syncRemoveButtonStates();
+                syncCondAllRowVisibility();
                 if (typeof filterCheckinLoans === 'function') {
                     filterCheckinLoans();
                 }
@@ -1462,6 +1471,7 @@ function gearroomInit() {
                 updateActionFields();
             }
             syncRemoveButtonStates();
+            syncCondAllRowVisibility();
         });
         }
     }
@@ -1493,6 +1503,7 @@ function gearroomInit() {
             filterItemsByLocation(clone);
             itemRowsContainer.appendChild(clone);
             syncRemoveButtonStates();
+            syncCondAllRowVisibility();
         });
         }
     }
