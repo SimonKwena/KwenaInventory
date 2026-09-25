@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
+from django.forms.models import construct_instance
 
 from .models import (
     Announcement,
@@ -274,11 +275,26 @@ class CatalogItemBasicForm(forms.ModelForm):
             choices=[("", "— select —")] + [(s, s) for s in subcategories] + [("Other", "Other…")]
         )
 
+    def _post_clean(self):
+        self.instance = construct_instance(self, self.instance, self._meta.fields, self._meta.exclude)
+        try:
+            self.instance.validate_unique(exclude=["sku"])
+        except forms.ValidationError as e:
+            allowed = []
+            for error in e.error_dict.get("__all__", []):
+                if "unique_nonblank_catalog_item_sku" not in str(error):
+                    allowed.append(error)
+            if allowed:
+                self._update_errors(forms.ValidationError(allowed))
+
     def clean_sku(self):
         return (self.cleaned_data.get("sku") or "").strip()
 
     def clean(self):
         cleaned = super().clean()
+        unique_error = self.errors.get("__all__", [])
+        if any("unique_nonblank_catalog_item_sku" in str(e) for e in unique_error):
+            self.errors.pop("__all__", None)
         category = cleaned.get("category")
         if category == "Other":
             other = (cleaned.get("category_other") or "").strip()
@@ -299,6 +315,9 @@ class CatalogItemBasicForm(forms.ModelForm):
         elif subcategory:
             cleaned["subcategory"] = subcategory.strip()
         return cleaned
+
+    def clean_sku(self):
+        return (self.cleaned_data.get("sku") or "").strip()
 
 
 class StockEntryBasicForm(forms.ModelForm):

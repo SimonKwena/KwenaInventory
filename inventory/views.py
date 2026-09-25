@@ -2294,13 +2294,16 @@ def item_create(request):
                             catalog.save(update_fields=["image"])
                         messages.success(request, f"Added {stock_entry.name} @ {stock_entry.location.name}. A QR code was generated automatically.")
                 else:
-                    catalog = CatalogItem.objects.create(
-                        name=catalog_data.get("name"),
-                        description=catalog_data.get("description") or "",
-                        category=catalog_data.get("category") or "",
-                        subcategory=catalog_data.get("subcategory") or "",
+                    catalog, _ = CatalogItem.objects.get_or_create(
                         sku=sku,
-                        image=image,
+                        defaults={
+                            "name": catalog_data.get("name"),
+                            "description": catalog_data.get("description") or "",
+                            "category": catalog_data.get("category") or "",
+                            "subcategory": catalog_data.get("subcategory") or "",
+                            "image": image,
+                            "is_active": True,
+                        },
                     )
                     stock_entry = StockEntry.objects.create(
                         catalog_item=catalog,
