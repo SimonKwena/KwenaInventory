@@ -10,6 +10,7 @@ import datetime
 from django.db import models, transaction as db_transaction
 from django.db.models import Sum
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.timesince import timeuntil, timesince
 
 from .models import (
@@ -751,9 +752,13 @@ def _localize(dt):
     """Treat naive datetimes (from datetime-local form inputs) as South African
     local time and return them timezone-aware, so they store as the correct UTC
     value. Plain dates (from date inputs) are treated as local midnight. Aware
-    datetimes are passed through unchanged."""
+    datetimes and ISO-format strings are passed through correctly."""
     if dt is None:
         return None
+    if isinstance(dt, str):
+        dt = parse_datetime(dt)
+        if dt is None:
+            return None
     if isinstance(dt, datetime.date) and not isinstance(dt, datetime.datetime):
         dt = datetime.datetime(dt.year, dt.month, dt.day)
     if timezone.is_naive(dt):

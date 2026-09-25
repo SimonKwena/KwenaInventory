@@ -618,9 +618,12 @@ def cart(request):
             return redirect("inventory:catalog")
 
         # Read shared fields from the cart form.
-        taken_at = request.POST.get("taken_at") or None
-        expected_return = request.POST.get("expected_return") or None
+        taken_at_raw = request.POST.get("taken_at") or None
+        expected_return_raw = request.POST.get("expected_return") or None
         notes = (request.POST.get("notes") or "").strip()
+
+        taken_at = parse_datetime(taken_at_raw) if taken_at_raw else None
+        expected_return = parse_datetime(expected_return_raw) if expected_return_raw else None
 
         # Validate required fields.
         errors = []
@@ -634,6 +637,10 @@ def cart(request):
             errors.append("Expected return is required for book-ahead items.")
         if has_check_out and not expected_return:
             errors.append("Expected return is required for check-out items.")
+        if taken_at_raw and taken_at is None:
+            errors.append("Expected Checkout date is not valid.")
+        if expected_return_raw and expected_return is None:
+            errors.append("Expected return date is not valid.")
         if errors:
             for err in errors:
                 messages.error(request, err)
