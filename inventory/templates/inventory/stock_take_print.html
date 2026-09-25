@@ -174,7 +174,7 @@
                         <tr>
                             <td class="text-center">{{ forloop.counter }}</td>
                             <td>{{ item.name }}</td>
-                            <td class="text-muted">{{ item.category|default:"—" }}</td>
+                            <td class="text-muted">{{ item.category }}{% if item.subcategory %} · {{ item.subcategory }}{% endif %}</td>
                             <td class="text-right">{{ item.quantity_total }}</td>
                             <td class="text-right">{{ item.quantity_out }}</td>
                             <td class="text-right">{{ item.quantity_maintenance }}</td>
@@ -208,7 +208,7 @@
                         <tr>
                             <td class="text-center">{{ forloop.counter }}</td>
                             <td>{{ item.name }}</td>
-                            <td class="text-muted">{{ item.category|default:"—" }}</td>
+                            <td class="text-muted">{{ item.category }}{% if item.subcategory %} · {{ item.subcategory }}{% endif %}</td>
                             <td class="text-right">{{ item.quantity_total }}</td>
                             <td class="text-right">{{ item.quantity_out }}</td>
                             <td class="text-right">{{ item.quantity_maintenance }}</td>
