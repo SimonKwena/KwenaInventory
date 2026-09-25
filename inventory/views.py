@@ -10,12 +10,12 @@ from django.contrib.auth.models import User
 from django.core.paginator import Paginator
 from django.db.models import Q
 
-from django.http import JsonResponse, HttpResponseRedirect
+from django.http import FileResponse, JsonResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 
 from .forms import (
@@ -2783,22 +2783,60 @@ def stock_take_detail(request, pk):
     )
 
 
+@user_passes_test(lambda user: user.is_staff)
+def stock_take_print(request):
+    """Print current stock levels for a selected location or all locations."""
+    locations = Location.objects.filter(is_active=True).order_by("name")
+    location_id = request.GET.get("location", "")
+
+    items = (
+        Item.objects.select_related("location", "condition", "status")
+        .filter(is_active=True)
+        .order_by("location__name", "name")
+    )
+
+    selected_location = None
+    if location_id:
+        try:
+            selected_location = Location.objects.get(pk=int(location_id), is_active=True)
+            items = items.filter(location=selected_location)
+        except (ValueError, Location.DoesNotExist):
+            selected_location = None
+
+    grouped = {}
+    for item in items:
+        loc_name = item.location.name
+        grouped.setdefault(loc_name, []).append(item)
+
+    return render(
+        request,
+        "inventory/stock_take_print.html",
+        {
+            "locations": locations,
+            "selected_location": selected_location,
+            "grouped": grouped,
+            "items": items,
+            "printed_at": timezone.now(),
+        },
+    )
+
+
 @login_required
 @require_POST
 def onesignal_subscribe(request):
-    """Register or update a OneSignal player ID for the current user."""
+    """Register or update a OneSignal subscription ID for the current user."""
     try:
         payload = json.loads(request.body or "{}")
     except json.JSONDecodeError:
         return JsonResponse({"ok": False, "error": "Invalid JSON."}, status=400)
 
-    player_id = (payload.get("player_id") or "").strip()
+    subscription_id = (payload.get("subscription_id") or "").strip()
     user_agent = (payload.get("userAgent") or request.META.get("HTTP_USER_AGENT", "")).strip()[:512]
-    if not player_id:
-        return JsonResponse({"ok": False, "error": "Missing player_id."}, status=400)
+    if not subscription_id:
+        return JsonResponse({"ok": False, "error": "Missing subscription_id."}, status=400)
 
     OneSignalPlayer.objects.update_or_create(
-        player_id=player_id,
+        player_id=subscription_id,
         defaults={
             "user": request.user,
             "user_agent": user_agent,
@@ -2811,27 +2849,27 @@ def onesignal_subscribe(request):
 @login_required
 @require_POST
 def onesignal_unsubscribe(request):
-    """Remove a OneSignal player ID for the current user."""
+    """Remove a OneSignal subscription ID for the current user."""
     try:
         payload = json.loads(request.body or "{}")
     except json.JSONDecodeError:
         return JsonResponse({"ok": False, "error": "Invalid JSON."}, status=400)
 
-    player_id = (payload.get("player_id") or "").strip()
-    if not player_id:
-        return JsonResponse({"ok": False, "error": "Missing player_id."}, status=400)
+    subscription_id = (payload.get("subscription_id") or "").strip()
+    if not subscription_id:
+        return JsonResponse({"ok": False, "error": "Missing subscription_id."}, status=400)
 
-    deleted, _ = OneSignalPlayer.objects.filter(player_id=player_id, user=request.user).delete()
+    deleted, _ = OneSignalPlayer.objects.filter(player_id=subscription_id, user=request.user).delete()
     return JsonResponse({"ok": True, "deleted": deleted})
 
 
 @login_required
 def onesignal_devices(request):
-    """List the current user's OneSignal player IDs (JSON)."""
+    """List the current user's OneSignal subscription IDs (JSON)."""
     devices = OneSignalPlayer.objects.filter(user=request.user).order_by("-created_at")
     data = [
         {
-            "player_id": d.player_id,
+            "subscription_id": d.player_id,
             "user_agent": d.user_agent,
             "created_at": d.created_at.isoformat(),
             "last_used": d.last_used.isoformat(),
@@ -2839,4 +2877,10 @@ def onesignal_devices(request):
         for d in devices
     ]
     return JsonResponse({"ok": True, "devices": data})
+
+
+@require_GET
+def onesignal_sw(request):
+    sw_path = settings.BASE_DIR / "static" / "OneSignalSDKWorker.js"
+    return FileResponse(open(sw_path, "rb"), content_type="application/javascript")
 

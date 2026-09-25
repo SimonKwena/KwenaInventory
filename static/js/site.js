@@ -3234,48 +3234,37 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        async function ensureOneSignal() {
-            if (typeof OneSignal === 'undefined') {
-                return null;
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        OneSignalDeferred.push(function(OneSignal) {
+            if (OneSignal.User.PushSubscription.optedIn) {
+                setSubscribed(true);
             }
-            try {
-                await OneSignal.Default.pushPermission.request();
-            } catch (err) {
-                console.error('OneSignal permission request failed:', err);
-            }
-            return OneSignal.Default;
-        }
 
-        enableBtn.addEventListener('click', async function () {
-            enableBtn.disabled = true;
-            const os = await ensureOneSignal();
-            if (os) {
+            enableBtn.addEventListener('click', async function () {
+                enableBtn.disabled = true;
                 try {
-                    await os.registerForPushNotifications();
+                    await OneSignal.Notifications.requestPermission();
                 } catch (err) {
-                    console.error('OneSignal register failed:', err);
+                    console.error('OneSignal permission request failed:', err);
                 }
-            }
-            enableBtn.disabled = false;
-        });
+                enableBtn.disabled = false;
+            });
 
-        disableBtn.addEventListener('click', async function () {
-            if (typeof OneSignal === 'undefined') return;
-            try {
-                await OneSignal.Default.logout();
-            } catch (err) {
-                console.error('OneSignal disable failed:', err);
-            }
-            setSubscribed(false);
-        });
+            disableBtn.addEventListener('click', async function () {
+                try {
+                    await OneSignal.User.PushSubscription.optOut();
+                } catch (err) {
+                    console.error('OneSignal disable failed:', err);
+                }
+                setSubscribed(false);
+            });
 
-        if (typeof OneSignal !== 'undefined') {
-            OneSignal.Default.subscribeNotificationChange(async function (state) {
-                const subscribed = state && state.isSubscribed;
+            OneSignal.User.PushSubscription.addEventListener('change', async function (event) {
+                const subscribed = event && event.current && event.current.optedIn;
                 setSubscribed(subscribed);
                 if (!subscribed) return;
-                const playerId = await OneSignal.Default.getPlayerId();
-                if (!playerId) return;
+                const subscriptionId = event.current.id;
+                if (!subscriptionId) return;
                 const csrfToken = getCsrfToken();
                 try {
                     await fetch(appUrl('onesignal/subscribe/'), {
@@ -3284,13 +3273,13 @@ document.addEventListener('DOMContentLoaded', function () {
                             'Content-Type': 'application/json',
                             'X-CSRFToken': csrfToken,
                         },
-                        body: JSON.stringify({ player_id: playerId }),
+                        body: JSON.stringify({ subscription_id: subscriptionId }),
                     });
                 } catch (err) {
                     console.error('OneSignal subscribe failed:', err);
                 }
             });
-        }
+        });
     }
 
     initOneSignal();

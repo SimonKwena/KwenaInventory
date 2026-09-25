@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Current Stock Report | Kwena Music</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        @page { margin: 14mm; size: A4; }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+            color: #1a1a1a;
+            background: #fff;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .sheet {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 22px 26px;
+        }
+        .sheet-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 3px solid #1a1a1a;
+            padding-bottom: 14px;
+            margin-bottom: 18px;
+        }
+        .sheet-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .sheet-brand img {
+            width: 48px;
+            height: 48px;
+            object-fit: contain;
+        }
+        .sheet-brand-name {
+            font-size: 1.15rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+        }
+        .sheet-brand-sub {
+            font-size: 0.68rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #555;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+        .sheet-meta {
+            text-align: right;
+            font-size: 0.75rem;
+            color: #555;
+            line-height: 1.5;
+        }
+        .sheet-title {
+            font-size: 1.35rem;
+            font-weight: 800;
+            margin: 0 0 4px 0;
+        }
+        .sheet-subtitle {
+            font-size: 0.82rem;
+            color: #555;
+            margin: 0 0 18px 0;
+        }
+        .sheet-section + .sheet-section {
+            margin-top: 18px;
+        }
+        .sheet-section-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #444;
+            margin: 0 0 8px 0;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #ddd;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+        thead th {
+            text-align: left;
+            padding: 7px 8px;
+            border-bottom: 2px solid #1a1a1a;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #444;
+        }
+        tbody td {
+            padding: 7px 8px;
+            border-bottom: 1px solid #e5e5e5;
+            vertical-align: top;
+        }
+        tbody tr:last-child td {
+            border-bottom: 2px solid #1a1a1a;
+        }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .text-muted { color: #666; }
+        .footnote {
+            margin-top: 18px;
+            font-size: 0.68rem;
+            color: #777;
+            line-height: 1.5;
+        }
+        .no-print {
+            display: none;
+        }
+        @media print {
+            body { background: #fff; }
+            .sheet { padding: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="sheet">
+        <div class="sheet-header">
+            <div class="sheet-brand">
+                <img src="{% static 'images/kwena-logo-black.png' %}" alt="Kwena Music">
+                <div>
+                    <div class="sheet-brand-name">Kwena Music</div>
+                    <div class="sheet-brand-sub">Gear Room</div>
+                </div>
+            </div>
+            <div class="sheet-meta">
+                <div>Printed: {{ printed_at|date:"d M Y, H:i" }}</div>
+                {% if selected_location %}
+                <div>Location: {{ selected_location.name }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <h1 class="sheet-title">Current Stock Report</h1>
+        <p class="sheet-subtitle">
+            {% if selected_location %}
+                Showing stock for <strong>{{ selected_location.name }}</strong>
+            {% else %}
+                Showing stock for all active locations
+            {% endif %}
+            &middot; {{ items|length }} item{{ items|length|pluralize }}
+        </p>
+
+        {% if selected_location %}
+            {% if items %}
+            <div class="sheet-section">
+                <div class="sheet-section-title">{{ selected_location.name }}</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:36px">#</th>
+                            <th>Item</th>
+                            <th>SKU</th>
+                            <th class="text-right">Total</th>
+                            <th class="text-right">Out</th>
+                            <th class="text-right">Maint.</th>
+                            <th class="text-right">Available</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td class="text-center">{{ forloop.counter }}</td>
+                            <td>{{ item.name }}</td>
+                            <td class="text-muted">{{ item.sku|default:"—" }}</td>
+                            <td class="text-right">{{ item.quantity_total }}</td>
+                            <td class="text-right">{{ item.quantity_out }}</td>
+                            <td class="text-right">{{ item.quantity_maintenance }}</td>
+                            <td class="text-right"><strong>{{ item.quantity_available }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">No active items found for this location.</p>
+            {% endif %}
+        {% else %}
+            {% for loc_name, loc_items in grouped.items %}
+            <div class="sheet-section">
+                <div class="sheet-section-title">{{ loc_name }} &middot; {{ loc_items|length }} item{{ loc_items|length|pluralize }}</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:36px">#</th>
+                            <th>Item</th>
+                            <th>SKU</th>
+                            <th class="text-right">Total</th>
+                            <th class="text-right">Out</th>
+                            <th class="text-right">Maint.</th>
+                            <th class="text-right">Available</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in loc_items %}
+                        <tr>
+                            <td class="text-center">{{ forloop.counter }}</td>
+                            <td>{{ item.name }}</td>
+                            <td class="text-muted">{{ item.sku|default:"—" }}</td>
+                            <td class="text-right">{{ item.quantity_total }}</td>
+                            <td class="text-right">{{ item.quantity_out }}</td>
+                            <td class="text-right">{{ item.quantity_maintenance }}</td>
+                            <td class="text-right"><strong>{{ item.quantity_available }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endfor %}
+            {% if not grouped %}
+            <p class="text-muted">No active items found.</p>
+            {% endif %}
+        {% endif %}
+
+        <p class="footnote">
+            Kwena Music &middot; Gear, in and out &middot; Generated {{ printed_at|date:"Y-m-d H:i" }}
+        </p>
+
+        <div class="no-print" style="margin-top:18px;">
+            <button type="button" onclick="window.print(); window.close();">Print</button>
+            <button type="button" onclick="window.close();">Close</button>
+        </div>
+    </div>
+
+    <script>
+        if (window.opener) {
+            window.addEventListener('load', function () {
+                window.focus();
+                window.print();
+            });
+        }
+    </script>
+</body>
+</html>

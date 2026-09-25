@@ -18,6 +18,18 @@
     {% endif %}
     {% if onesignal_app_id %}
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        OneSignalDeferred.push(async function(OneSignal) {
+            await OneSignal.init({
+                appId: "{{ onesignal_app_id }}",
+                serviceWorkerPath: "{% url 'inventory:onesignal_sw' %}",
+            });
+            {% if request.user.is_authenticated %}
+            await OneSignal.login("{{ request.user.pk }}");
+            {% endif %}
+        });
+    </script>
     {% endif %}
     <script defer src="{% static 'js/site.js' %}?v=44"></script>
 </head>

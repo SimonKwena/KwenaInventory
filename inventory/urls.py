@@ -60,7 +60,9 @@ urlpatterns = [
     path("stock-takes/", views.stock_take_list, name="stock_take_list"),
     path("stock-takes/new/", views.stock_take_create, name="stock_take_create"),
     path("stock-takes/<int:pk>/", views.stock_take_detail, name="stock_take_detail"),
+    path("stock-takes/print/", views.stock_take_print, name="stock_take_print"),
     path("onesignal/subscribe/", views.onesignal_subscribe, name="onesignal_subscribe"),
     path("onesignal/unsubscribe/", views.onesignal_unsubscribe, name="onesignal_unsubscribe"),
     path("onesignal/devices/", views.onesignal_devices, name="onesignal_devices"),
+    path("OneSignalSDKWorker.js", views.onesignal_sw, name="onesignal_sw"),
 ]

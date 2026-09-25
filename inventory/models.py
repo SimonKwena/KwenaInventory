@@ -1040,10 +1040,10 @@ def cleanup_old_notifications(days=180, keep_unread=True):
 
 
 class OneSignalPlayer(models.Model):
-    """A OneSignal player ID linked to a Django user.
+    """A OneSignal subscription ID linked to a Django user.
 
-    OneSignal uses player IDs to identify specific browser/device instances
-    for cross-browser push delivery. A user may have multiple player IDs.
+    OneSignal uses subscription IDs to identify specific browser/device instances
+    for push delivery. A user may have multiple subscription IDs.
     """
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="onesignal_players")
@@ -1059,12 +1059,11 @@ class OneSignalPlayer(models.Model):
         ]
 
     def __str__(self):
-        return f"OneSignal player for {self.user.username}"
+        return f"OneSignal subscription for {self.user.username}"
 
 
 def send_push_notification(user, title, message, url=""):
-    """Send a push notification via OneSignal to all of the user's registered
-    player IDs.
+    """Send a push notification via OneSignal to the user's registered devices.
 
     Returns the number of notifications accepted by OneSignal.
     Failures are logged but never raised so notification delivery never
@@ -1074,24 +1073,19 @@ def send_push_notification(user, title, message, url=""):
     rest_key = getattr(settings, "ONESIGNAL_REST_API_KEY", "")
     if not app_id or not rest_key:
         return 0
-    players = list(
-        OneSignalPlayer.objects.filter(user=user).values_list("player_id", flat=True)
-    )
-    if not players:
-        return 0
     payload = json.dumps({
         "app_id": app_id,
-        "include_player_ids": players,
+        "include_external_user_ids": [str(user.pk)],
         "headings": {"en": title},
         "contents": {"en": message},
         "url": url or "/",
     }).encode("utf-8")
     req = urllib.request.Request(
-        "https://onesignal.com/api/v1/notifications",
+        "https://api.onesignal.com/notifications",
         data=payload,
         headers={
             "Content-Type": "application/json; charset=utf-8",
-            "Authorization": f"Basic {rest_key}",
+            "Authorization": f"Key {rest_key}",
         },
         method="POST",
     )
@@ -1099,12 +1093,7 @@ def send_push_notification(user, title, message, url=""):
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             if resp.status == 200:
-                sent = len(players)
+                sent = 1
     except Exception:
         logger.exception("OneSignal push failed for user %s", user.pk)
-    for pid in players:
-        try:
-            OneSignalPlayer.objects.filter(player_id=pid).update(last_used=timezone.now())
-        except Exception:
-            logger.exception("Failed to update OneSignal player last_used for %s", pid)
     return sent
