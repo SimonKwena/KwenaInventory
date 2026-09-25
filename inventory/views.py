@@ -28,7 +28,8 @@ from .forms import (
     MaintenanceForm,
     RequestEditForm,
     ScanItemForm,
-    StockEntryBasicForm,
+    StockEntryFormSet,
+    StockEntryRowForm,
     TransactionForm,
 )
 from .models import (
@@ -2193,11 +2194,13 @@ def item_detail(request, pk):
     if not request.user.is_staff and not location_is_visible(request.user, stock_entry.location):
         messages.error(request, "You do not have access to that location.")
         return redirect("inventory:catalog")
+    all_entries = StockEntry.objects.filter(catalog_item=stock_entry.catalog_item).select_related("catalog_item", "location", "condition", "status").order_by("location__name")
     return render(
         request,
         "inventory/item_detail.html",
         {
             "item": stock_entry,
+            "all_entries": all_entries,
             "can_check_out": can_check_out(request.user),
             "cart_counts": _cart_counts(request),
         },
@@ -2206,15 +2209,28 @@ def item_detail(request, pk):
 
 @user_passes_test(lambda user: user.is_staff)
 def item_list(request):
-    items = (
+    stock_entries = (
         StockEntry.objects.select_related("catalog_item", "location", "condition", "status")
         .all()
-        .order_by("catalog_item__category", "catalog_item__subcategory", "catalog_item__name")
+        .order_by("catalog_item__category", "catalog_item__subcategory", "catalog_item__name", "location__name")
     )
 
-    total_items = items.count()
-    total_available = sum(item.quantity_available for item in items)
-    total_out = sum(item.quantity_out for item in items)
+    grouped = {}
+    for entry in stock_entries:
+        grouped.setdefault(entry.catalog_item, []).append(entry)
+
+    grouped_items = []
+    for catalog, entries in grouped.items():
+        total_available = sum(entry.quantity_available for entry in entries)
+        grouped_items.append({
+            "catalog": catalog,
+            "entries": entries,
+            "total_available": total_available,
+        })
+
+    total_items = stock_entries.count()
+    total_available = sum(entry.quantity_available for entry in stock_entries)
+    total_out = sum(entry.quantity_out for entry in stock_entries)
     maintenance_count = Maintenance.objects.filter(completed_at__isnull=True).count()
     locations = Location.objects.filter(is_active=True)
     categories = list(
@@ -2228,7 +2244,7 @@ def item_list(request):
         request,
         "inventory/item_list.html",
         {
-            "items": items,
+            "grouped_items": grouped,
             "locations": locations,
             "categories": categories,
             "total_items": total_items,
@@ -2242,105 +2258,61 @@ def item_list(request):
 
 @user_passes_test(is_superadmin)
 def item_create(request):
-    step = request.POST.get("step") or request.GET.get("step") or "1"
-    draft = request.session.get(ITEM_CREATE_DRAFT_SESSION_KEY, {})
     if request.method == "POST":
-        if step == "1":
-            form = CatalogItemBasicForm(request.POST, request.FILES)
-            if form.is_valid():
-                request.session[ITEM_CREATE_DRAFT_SESSION_KEY] = {
-                    "catalog_data": form.cleaned_data,
-                }
-                request.session.modified = True
-                return redirect(f"{reverse('inventory:item_create')}?step=2")
-        else:
-            form = StockEntryBasicForm(request.POST, user=request.user)
-            if form.is_valid():
-                catalog_data = draft.get("catalog_data", {})
-                sku = (catalog_data.get("sku") or "").strip()
-                catalog = CatalogItem.objects.filter(sku__iexact=sku).first() if sku else None
-                location = form.cleaned_data.get("location")
-                added = form.cleaned_data.get("quantity_total") or 0
-                image = catalog_data.get("image") or request.FILES.get("image")
-
-                if catalog:
-                    stock_entry = StockEntry.objects.filter(catalog_item=catalog, location=location).first()
-                    if stock_entry:
-                        stock_entry.quantity_total = (stock_entry.quantity_total or 0) + added
-                        for field in ("quantity_out", "quantity_maintenance", "condition", "status"):
-                            value = form.cleaned_data.get(field)
-                            if value not in (None, ""):
-                                setattr(stock_entry, field, value)
-                        if image:
-                            stock_entry.catalog_item.image = image
-                            stock_entry.catalog_item.save(update_fields=["image"])
-                        stock_entry.save()
-                        messages.success(
-                            request,
-                            f"Restocked {stock_entry.name} @ {stock_entry.location.name}: +{added} unit(s). New total is {stock_entry.quantity_total}.",
-                        )
+        form = ItemForm(request.POST, request.FILES)
+        formset = StockEntryFormSet(request.POST, form_kwargs={"user": request.user})
+        if form.is_valid() and formset.is_valid():
+            sku = (form.cleaned_data.get("sku") or "").strip()
+            image = request.FILES.get("image") or form.cleaned_data.get("image")
+            catalog, _ = CatalogItem.objects.get_or_create(
+                sku=sku,
+                defaults={
+                    "name": form.cleaned_data.get("name"),
+                    "description": form.cleaned_data.get("description") or "",
+                    "category": form.cleaned_data.get("category") or "",
+                    "subcategory": form.cleaned_data.get("subcategory") or "",
+                    "image": image,
+                    "is_active": True,
+                },
+            )
+            if image and not catalog.image:
+                catalog.image = image
+                catalog.save(update_fields=["image"])
+            created = []
+            for stock_form in formset:
+                if stock_form.cleaned_data and not stock_form.cleaned_data.get("DELETE", False):
+                    location = stock_form.cleaned_data.get("location")
+                    if not location:
+                        continue
+                    existing = StockEntry.objects.filter(catalog_item=catalog, location=location).first()
+                    if existing:
+                        existing.quantity_total = (existing.quantity_total or 0) + (stock_form.cleaned_data.get("quantity_total") or 0)
+                        existing.quantity_out = (existing.quantity_out or 0) + (stock_form.cleaned_data.get("quantity_out") or 0)
+                        existing.quantity_maintenance = (existing.quantity_maintenance or 0) + (stock_form.cleaned_data.get("quantity_maintenance") or 0)
+                        for field in ("condition", "status"):
+                            value = stock_form.cleaned_data.get(field)
+                            if value:
+                                setattr(existing, field, value)
+                        existing.save()
+                        created.append(existing)
                     else:
-                        stock_entry = StockEntry.objects.create(
+                        created.append(StockEntry.objects.create(
                             catalog_item=catalog,
                             location=location,
-                            quantity_total=added,
-                            quantity_out=form.cleaned_data.get("quantity_out") or 0,
-                            quantity_maintenance=form.cleaned_data.get("quantity_maintenance") or 0,
-                            condition=form.cleaned_data.get("condition"),
-                            status=form.cleaned_data.get("status"),
-                        )
-                        if image:
-                            catalog.image = image
-                            catalog.save(update_fields=["image"])
-                        messages.success(request, f"Added {stock_entry.name} @ {stock_entry.location.name}. A QR code was generated automatically.")
-                else:
-                    catalog, _ = CatalogItem.objects.get_or_create(
-                        sku=sku,
-                        defaults={
-                            "name": catalog_data.get("name"),
-                            "description": catalog_data.get("description") or "",
-                            "category": catalog_data.get("category") or "",
-                            "subcategory": catalog_data.get("subcategory") or "",
-                            "image": image,
-                            "is_active": True,
-                        },
-                    )
-                    stock_entry = StockEntry.objects.create(
-                        catalog_item=catalog,
-                        location=location,
-                        quantity_total=added,
-                        quantity_out=form.cleaned_data.get("quantity_out") or 0,
-                        quantity_maintenance=form.cleaned_data.get("quantity_maintenance") or 0,
-                        condition=form.cleaned_data.get("condition"),
-                        status=form.cleaned_data.get("status"),
-                    )
-                    messages.success(request, f"Added {stock_entry.name} @ {stock_entry.location.name}. A QR code was generated automatically.")
-                draft["last_stock_entry_pk"] = stock_entry.pk
-                request.session[ITEM_CREATE_DRAFT_SESSION_KEY] = draft
-                if request.GET.get("repeat") != "1":
-                    request.session.pop(ITEM_CREATE_DRAFT_SESSION_KEY, None)
-                    return redirect("inventory:item_detail", pk=stock_entry.pk)
-                return redirect(f"{reverse('inventory:item_create')}?step=2&repeat=1")
+                            quantity_total=stock_form.cleaned_data.get("quantity_total") or 0,
+                            quantity_out=stock_form.cleaned_data.get("quantity_out") or 0,
+                            quantity_maintenance=stock_form.cleaned_data.get("quantity_maintenance") or 0,
+                            condition=stock_form.cleaned_data.get("condition"),
+                            status=stock_form.cleaned_data.get("status"),
+                        ))
+            if created:
+                messages.success(request, f"Added {catalog.name} in {len(created)} location(s). QR codes were generated automatically.")
+                return redirect("inventory:item_detail", pk=created[0].pk)
+            messages.error(request, "Please add at least one location.")
     else:
-        if step == "2":
-            if not draft.get("catalog_data"):
-                return redirect("inventory:item_create")
-            form = StockEntryBasicForm(user=request.user)
-        else:
-            form = CatalogItemBasicForm()
-            request.session.pop(ITEM_CREATE_DRAFT_SESSION_KEY, None)
-    return render(
-        request,
-        "inventory/item_form.html",
-        {
-            "form": form,
-            "is_edit": False,
-            "create_step": step,
-            "catalog_draft": draft.get("catalog_data") if step == "2" else None,
-            "repeat_mode": request.GET.get("repeat") == "1",
-            "last_stock_entry_pk": draft.get("last_stock_entry_pk"),
-        },
-    )
+        form = ItemForm()
+        formset = StockEntryFormSet(queryset=StockEntry.objects.none(), form_kwargs={"user": request.user})
+    return render(request, "inventory/item_form.html", {"form": form, "formset": formset, "is_edit": False})
 
 
 @user_passes_test(is_superadmin)
@@ -2348,55 +2320,37 @@ def item_edit(request, pk):
     stock_entry = get_object_or_404(StockEntry, pk=pk)
     catalog = stock_entry.catalog_item
     if request.method == "POST":
-        form = ItemForm(request.POST, request.FILES, instance=stock_entry, user=request.user)
-        if form.is_valid():
-            sku = (form.cleaned_data.get("sku") or "").strip()
-            target_catalog = CatalogItem.objects.filter(sku__iexact=sku).exclude(pk=catalog.pk).first() if sku else None
-            if target_catalog:
-                target_stock = StockEntry.objects.filter(catalog_item=target_catalog, location=stock_entry.location).first()
-                if target_stock and stock_entry.transactions.exists():
-                    messages.error(
-                        request,
-                        "Cannot merge: this stock entry has transaction history. Update the target directly instead.",
-                    )
-                    return render(request, "inventory/item_form.html", {"form": form, "item": stock_entry, "is_edit": True})
-                if target_stock:
-                    target_stock.quantity_total = (target_stock.quantity_total or 0) + (stock_entry.quantity_total or 0)
-                    target_stock.quantity_out = (target_stock.quantity_out or 0) + (stock_entry.quantity_out or 0)
-                    for field in ("quantity_maintenance", "condition", "status"):
-                        if not getattr(target_stock, field):
-                            value = form.cleaned_data.get(field)
-                            if value not in (None, ""):
-                                setattr(target_stock, field, value)
-                    if form.cleaned_data.get("location") and not target_stock.location:
-                        target_stock.location = form.cleaned_data["location"]
-                    target_stock.save()
-                    stock_entry.delete()
-                    messages.success(request, f"Merged into {target_stock.name}. Combined total is {target_stock.quantity_total}.")
-                    return redirect("inventory:item_detail", pk=target_stock.pk)
-                messages.error(request, "Target catalog item has no stock entry at this location.")
-                return render(request, "inventory/item_form.html", {"form": form, "item": stock_entry, "is_edit": True})
-
-            catalog.name = form.cleaned_data.get("name") or catalog.name
-            catalog.description = form.cleaned_data.get("description") or catalog.description
-            catalog.category = form.cleaned_data.get("category") or catalog.category
-            catalog.subcategory = form.cleaned_data.get("subcategory") or catalog.subcategory
-            catalog.sku = sku
-            if request.FILES.get("image"):
-                catalog.image = request.FILES["image"]
-            catalog.save(update_fields=["name", "description", "category", "subcategory", "sku", "image"])
-
-            for field in ("quantity_total", "quantity_out", "quantity_maintenance", "condition", "status", "location"):
-                value = form.cleaned_data.get(field)
-                if value not in (None, ""):
-                    setattr(stock_entry, field, value)
-            stock_entry.save()
-            messages.success(request, f"Updated {stock_entry.name}.")
+        form = ItemForm(request.POST, request.FILES, instance=catalog)
+        formset = StockEntryFormSet(request.POST, queryset=StockEntry.objects.filter(catalog_item=catalog), form_kwargs={"user": request.user})
+        if form.is_valid() and formset.is_valid():
+            form.save()
+            for stock_form in formset:
+                if stock_form.cleaned_data.get("DELETE", False):
+                    if stock_form.instance.pk:
+                        stock_form.instance.delete()
+                    continue
+                if stock_form.cleaned_data.get("location"):
+                    location = stock_form.cleaned_data["location"]
+                    existing = StockEntry.objects.filter(catalog_item=catalog, location=location).exclude(pk=stock_form.instance.pk).first()
+                    if existing:
+                        existing.quantity_total = (existing.quantity_total or 0) + (stock_form.cleaned_data.get("quantity_total") or 0)
+                        existing.quantity_out = (existing.quantity_out or 0) + (stock_form.cleaned_data.get("quantity_out") or 0)
+                        existing.quantity_maintenance = (existing.quantity_maintenance or 0) + (stock_form.cleaned_data.get("quantity_maintenance") or 0)
+                        for field in ("condition", "status"):
+                            value = stock_form.cleaned_data.get(field)
+                            if value:
+                                setattr(existing, field, value)
+                        existing.save()
+                        stock_form.instance.delete()
+                    else:
+                        stock_form.instance.catalog_item = catalog
+                        stock_form.instance.save()
+            messages.success(request, f"Updated {catalog.name}.")
             return redirect("inventory:item_detail", pk=stock_entry.pk)
-        messages.error(request, "Please correct the errors below.")
     else:
-        form = ItemForm(instance=stock_entry, user=request.user)
-    return render(request, "inventory/item_form.html", {"form": form, "item": stock_entry, "is_edit": True})
+        form = ItemForm(instance=catalog)
+        formset = StockEntryFormSet(queryset=StockEntry.objects.filter(catalog_item=catalog), form_kwargs={"user": request.user})
+    return render(request, "inventory/item_form.html", {"form": form, "formset": formset, "is_edit": True, "item": stock_entry})
 
 
 @user_passes_test(lambda user: user.is_staff or role_of(user) == ROLE_TEACHER)

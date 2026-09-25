@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
-from django.forms.models import construct_instance
+from django.forms.models import construct_instance, modelformset_factory
 
 from .models import (
     Announcement,
@@ -127,35 +127,21 @@ class ItemForm(forms.ModelForm):
     subcategory_other = forms.CharField(required=False, label="Other subcategory")
 
     class Meta:
-        model = StockEntry
-        fields = [
-            "catalog_item", "location", "quantity_total", "quantity_out", "quantity_maintenance", "condition", "status",
-        ]
+        model = CatalogItem
+        fields = ["name", "description", "category", "subcategory", "sku", "image"]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 3}),
             "sku": forms.TextInput(attrs={"placeholder": "Unique code, e.g. XLR-30M"}),
         }
         labels = {
-            "catalog_item": "Item name",
-            "quantity_total": "Total quantity",
-            "quantity_out": "Quantity currently out",
+            "name": "Item name",
+            "sku": "SKU",
             "image": "Photo (optional)",
         }
 
-    name = forms.CharField(max_length=250, required=False, label="Item name")
-    description = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), required=False, label="Description")
-    category = forms.CharField(max_length=100, required=False, label="Category")
-    subcategory = forms.CharField(max_length=100, required=False, label="Subcategory")
-    sku = forms.CharField(max_length=100, required=False, label="SKU")
-    image = forms.ImageField(required=False, label="Photo (optional)")
-
-    def __init__(self, *args, user=None, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["location"].queryset = visible_locations(user)
-        self.fields["condition"].queryset = ConditionOption.objects.filter(is_active=True).order_by("name")
-        self.fields["status"].queryset = StatusOption.objects.filter(is_active=True).order_by("name")
-        self.fields["catalog_item"].queryset = CatalogItem.objects.filter(is_active=True).order_by("name")
-
+        self._meta.validate_unique = False
         categories = list(
             CatalogItem.objects.exclude(category="").values_list("category", flat=True).distinct().order_by("category")
         )
@@ -168,42 +154,24 @@ class ItemForm(forms.ModelForm):
         self.fields["subcategory"].widget = forms.Select(
             choices=[("", "— select —")] + [(s, s) for s in subcategories] + [("Other", "Other…")]
         )
-        if self.instance.pk:
-            stock = self.instance
-            catalog = stock.catalog_item
-            self.fields["name"].initial = catalog.name
-            self.fields["description"].initial = catalog.description
-            self.fields["category"].initial = catalog.category
-            self.fields["subcategory"].initial = catalog.subcategory
-            self.fields["sku"].initial = catalog.sku
-            self.fields["quantity_out"].initial = stock.quantity_out
-            available = StatusOption.objects.filter(name="Available").first()
-            if available and not stock.status:
-                self.fields["status"].initial = available
-        else:
-            self.fields["quantity_out"].initial = 0
-            available = StatusOption.objects.filter(name="Available").first()
-            if available:
-                self.fields["status"].initial = available
+
+    def _post_clean(self):
+        self.instance = construct_instance(self, self.instance, self._meta.fields, self._meta.exclude)
+        try:
+            self.instance.validate_unique(exclude=["sku"])
+        except forms.ValidationError as e:
+            allowed = []
+            for error in e.error_dict.get("__all__", []):
+                if "unique_nonblank_catalog_item_sku" not in str(error):
+                    allowed.append(error)
+            if allowed:
+                self._update_errors(forms.ValidationError(allowed))
 
     def clean_sku(self):
         return (self.cleaned_data.get("sku") or "").strip()
 
-    def validate_unique(self):
-        exclude = self._get_validation_exclusions()
-        exclude.add("sku")
-        try:
-            self.instance.validate_unique(exclude=exclude)
-        except forms.ValidationError as e:
-            self._update_errors(e)
-
     def clean(self):
         cleaned = super().clean()
-        total = cleaned.get("quantity_total") or 0
-        out = cleaned.get("quantity_out") or 0
-        if out > total:
-            self.add_error("quantity_out", "Quantity out cannot be greater than total quantity.")
-
         category = cleaned.get("category")
         if category == "Other":
             other = (cleaned.get("category_other") or "").strip()
@@ -225,21 +193,31 @@ class ItemForm(forms.ModelForm):
             cleaned["subcategory"] = subcategory.strip()
         return cleaned
 
-    def save(self, commit=True):
-        stock_entry = super().save(commit=False)
-        catalog = stock_entry.catalog_item
-        if catalog:
-            catalog.name = self.cleaned_data.get("name") or catalog.name
-            catalog.description = self.cleaned_data.get("description") or catalog.description
-            catalog.category = self.cleaned_data.get("category") or catalog.category
-            catalog.subcategory = self.cleaned_data.get("subcategory") or catalog.subcategory
-            catalog.sku = self.cleaned_data.get("sku") or catalog.sku
-            if self.cleaned_data.get("image"):
-                catalog.image = self.cleaned_data["image"]
-            catalog.save(update_fields=["name", "description", "category", "subcategory", "sku", "image"])
-        if commit:
-            stock_entry.save()
-        return stock_entry
+
+class StockEntryRowForm(forms.ModelForm):
+    class Meta:
+        model = StockEntry
+        fields = ["location", "quantity_total", "quantity_out", "quantity_maintenance", "condition", "status"]
+        labels = {
+            "quantity_total": "Qty",
+            "quantity_out": "Out",
+            "quantity_maintenance": "Maint",
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["location"].queryset = visible_locations(user)
+        self.fields["condition"].queryset = ConditionOption.objects.filter(is_active=True).order_by("name")
+        self.fields["status"].queryset = StatusOption.objects.filter(is_active=True).order_by("name")
+
+
+StockEntryFormSet = modelformset_factory(
+    StockEntry,
+    form=StockEntryRowForm,
+    extra=1,
+    can_delete=True,
+    fields=["location", "quantity_total", "quantity_out", "quantity_maintenance", "condition", "status"],
+)
 
 
 class CatalogItemBasicForm(forms.ModelForm):

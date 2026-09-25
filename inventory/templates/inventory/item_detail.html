@@ -7,7 +7,7 @@
     <div class="action-bar">
         <div>
             <h2>{{ item.name }}</h2>
-            <p class="section-note">Item details, location, and QR code.</p>
+            <p class="section-note">Item details across all locations.</p>
         </div>
         <div class="actions">
             {% if user_role == "superadmin" %}
@@ -45,11 +45,8 @@
 <div class="card">
     <div class="grid grid-2" style="align-items:start;">
         <div>
-            <p><strong>Location:</strong> {{ item.location.name }}</p>
             <p><strong>SKU:</strong> {{ item.catalog_item.sku }}</p>
             <p><strong>Description:</strong> {{ item.catalog_item.description|default:"No description" }}</p>
-            <p><strong>Available:</strong> {{ item.quantity_available }} / {{ item.quantity_total }}</p>
-            <p><strong>Out:</strong> {{ item.quantity_out }}</p>
             {% if item.catalog_item.category %}<p><strong>Category:</strong> {{ item.catalog_item.category }}{% if item.catalog_item.subcategory %} &middot; {{ item.catalog_item.subcategory }}{% endif %}</p>{% endif %}
         </div>
         {% if item.qr_image %}
@@ -66,6 +63,54 @@
             </div>
         </div>
         {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <h3>Locations</h3>
+    <div class="table-wrapper">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Location</th>
+                    <th>Condition</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                    <th>Available</th>
+                    <th>Out</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in all_entries %}
+                    <tr>
+                        <td>
+                            <a class="text-link" href="{% url 'inventory:item_detail' entry.pk %}">{{ entry.location.name }}</a>
+                        </td>
+                        <td>{{ entry.condition.name|default:"&mdash;" }}</td>
+                        <td>{{ entry.status.name|default:"&mdash;" }}</td>
+                        <td>{{ entry.quantity_total }}</td>
+                        <td>
+                            {% if entry.quantity_available > 0 %}
+                                <span class="pill pill-success">{{ entry.quantity_available }}</span>
+                            {% else %}
+                                <span class="pill pill-danger">0</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ entry.quantity_out }}</td>
+                        <td class="actions-cell items-actions">
+                            <span class="actions-inner">
+                                {% if user_role == "superadmin" %}
+                                <a class="button-link secondary btn-sm" href="{% url 'inventory:item_edit' entry.pk %}">Edit</a>
+                                {% endif %}
+                            </span>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="7">No locations yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
     <p style="margin-top:18px;">
         <a class="button-link secondary" href="{% url 'inventory:home' %}">Back to home</a>
@@ -109,4 +154,3 @@
     });
 </script>
 {% endblock %}
-

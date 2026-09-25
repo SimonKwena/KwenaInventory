@@ -6,22 +6,12 @@
 <div class="card">
     <div class="action-bar">
         <div>
-            <h2>
-                {% if is_edit %}
-                    Edit item
-                {% elif create_step == "2" %}
-                    Add item — room &amp; stock
-                {% else %}
-                    Add item
-                {% endif %}
-            </h2>
+            <h2>{% if is_edit %}Edit item{% else %}Add item{% endif %}</h2>
             <p class="section-note">
                 {% if is_edit %}
-                    Update the gear details below. Entering a SKU that belongs to another item merges this one into it.
-                {% elif create_step == "2" %}
-                    Choose the room and starting quantities for this item. Use the same SKU to add it to another room later.
+                    Update the item details and room stock below. Use the + button to add another location for this item.
                 {% else %}
-                    Step 1: define the item type. You will choose the room and quantities in the next step.
+                    Enter the item details once, then add one or more locations with their quantities.
                 {% endif %}
             </p>
         </div>
@@ -32,136 +22,143 @@
 </div>
 
 <div class="card">
-    <form method="post" action="{% if is_edit %}{% url 'inventory:item_edit' item.pk %}{% elif repeat_mode %}{% url 'inventory:item_create' %}?repeat=1{% else %}{% url 'inventory:item_create' %}{% endif %}" enctype="multipart/form-data">
+    <form method="post" action="{% if is_edit %}{% url 'inventory:item_edit' item.pk %}{% else %}{% url 'inventory:item_create' %}{% endif %}" enctype="multipart/form-data">
         {% csrf_token %}
+        {{ form.non_field_errors }}
+        {{ formset.non_form_errors }}
         {% if form.non_field_errors %}
             <div class="message error">{% for e in form.non_field_errors %}<span>{{ e }}</span>{% endfor %}</div>
         {% endif %}
-
-        {% if not is_edit and create_step == "2" %}
-            {% if messages %}
-                {% for message in messages %}
-                    <div class="message {{ message.tags }}"><span>{{ message }}</span></div>
-                {% endfor %}
-            {% endif %}
-            <div class="card-light" style="margin-bottom:18px;">
-                <strong>Item type:</strong> {{ catalog_draft.name }}{% if catalog_draft.sku %} &middot; {{ catalog_draft.sku }}{% endif %}{% if catalog_draft.category %} &middot; {{ catalog_draft.category }}{% endif %}
-                <input type="hidden" name="step" value="2">
-            </div>
-
-            <h3 class="form-section-title">Stock</h3>
-            <div class="form-row form-row-half">
-                <div class="field-input-group">
-                    <label class="label" for="{{ form.quantity_total.id_for_label }}">{{ form.quantity_total.label }}</label>
-                    {{ form.quantity_total }}
-                    {{ form.quantity_total.errors }}
-                </div>
-                <div class="field-input-group">
-                    <label class="label" for="{{ form.quantity_out.id_for_label }}">{{ form.quantity_out.label }}</label>
-                    {{ form.quantity_out }}
-                    {{ form.quantity_out.errors }}
-                </div>
-            </div>
-
-            <h3 class="form-section-title">Classification</h3>
-            <div class="form-row form-row-half">
-                <div class="field-input-group">
-                    <label class="label" for="{{ form.location.id_for_label }}">{{ form.location.label }}</label>
-                    {{ form.location }}
-                    {{ form.location.errors }}
-                </div>
-                <div class="field-input-group">
-                    <label class="label" for="{{ form.condition.id_for_label }}">{{ form.condition.label }}</label>
-                    {{ form.condition }}
-                    {{ form.condition.errors }}
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="field-input-group">
-                    <label class="label" for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
-                    {{ form.status }}
-                    {{ form.status.errors }}
-                </div>
-            </div>
-
-            <div class="actions">
-                <button type="submit" class="button-link">Add another room</button>
-                <a class="button-link secondary" href="{% if last_stock_entry_pk %}{% url 'inventory:item_detail' pk=last_stock_entry_pk %}{% else %}{% url 'inventory:dashboard' %}{% endif %}">Finish</a>
-                <a class="button-link secondary" href="{% url 'inventory:item_create' %}">Start over</a>
-            </div>
-        {% else %}
-            <h3 class="form-section-title">Details</h3>
-            <div class="form-row form-row-half">
-                <div class="field-input-group">
-                    <label class="label" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
-                    {{ form.name }}
-                    {{ form.name.errors }}
-                </div>
-                <div class="field-input-group">
-                    <label class="label" for="{{ form.sku.id_for_label }}">{{ form.sku.label }}</label>
-                    {{ form.sku }}
-                    {{ form.sku.errors }}
-                </div>
-            </div>
-            <div class="form-row form-row-half">
-                <div class="field-input-group">
-                    <label class="label" for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
-                    {{ form.category }}
-                    {{ form.category.errors }}
-                </div>
-                <div class="field-input-group" id="category-other-wrap" style="display:none;">
-                    <label class="label" for="{{ form.category_other.id_for_label }}">{{ form.category_other.label }}</label>
-                    {{ form.category_other }}
-                    {{ form.category_other.errors }}
-                </div>
-            </div>
-            <div class="form-row form-row-half">
-                <div class="field-input-group">
-                    <label class="label" for="{{ form.subcategory.id_for_label }}">{{ form.subcategory.label }}</label>
-                    {{ form.subcategory }}
-                    {{ form.subcategory.errors }}
-                </div>
-                <div class="field-input-group" id="subcategory-other-wrap" style="display:none;">
-                    <label class="label" for="{{ form.subcategory_other.id_for_label }}">{{ form.subcategory_other.label }}</label>
-                    {{ form.subcategory_other }}
-                    {{ form.subcategory_other.errors }}
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="field-input-group">
-                    <label class="label" for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
-                    {{ form.description }}
-                    {{ form.description.errors }}
-                </div>
-            </div>
-
-            <h3 class="form-section-title">Media</h3>
-            <div class="form-row">
-                <div class="field-input-group">
-                    <label class="label" for="{{ form.image.id_for_label }}">{{ form.image.label }}</label>
-                    {{ form.image }}
-                    {{ form.image.errors }}
-                </div>
-            </div>
-
-            <div class="actions">
-                <button type="submit" class="button-link">Continue</button>
-                <a class="button-link secondary" href="{% url 'inventory:dashboard' %}">Cancel</a>
-            </div>
+        {% if formset.non_form_errors %}
+            <div class="message error">{% for e in formset.non_form_errors %}<span>{{ e }}</span>{% endfor %}</div>
         {% endif %}
+
+        <h3 class="form-section-title">Item details</h3>
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                {{ form.name }}
+                {{ form.name.errors }}
+            </div>
+            <div class="field-input-group">
+                <label class="label" for="{{ form.sku.id_for_label }}">{{ form.sku.label }}</label>
+                {{ form.sku }}
+                {{ form.sku.errors }}
+            </div>
+        </div>
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
+                {{ form.category }}
+                {{ form.category.errors }}
+            </div>
+            <div class="field-input-group" id="category-other-wrap" style="display:none;">
+                <label class="label" for="{{ form.category_other.id_for_label }}">{{ form.category_other.label }}</label>
+                {{ form.category_other }}
+                {{ form.category_other.errors }}
+            </div>
+        </div>
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.subcategory.id_for_label }}">{{ form.subcategory.label }}</label>
+                {{ form.subcategory }}
+                {{ form.subcategory.errors }}
+            </div>
+            <div class="field-input-group" id="subcategory-other-wrap" style="display:none;">
+                <label class="label" for="{{ form.subcategory_other.id_for_label }}">{{ form.subcategory_other.label }}</label>
+                {{ form.subcategory_other }}
+                {{ form.subcategory_other.errors }}
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+                {{ form.description }}
+                {{ form.description.errors }}
+            </div>
+        </div>
+
+        <h3 class="form-section-title">Locations &amp; stock</h3>
+        <div class="form-row">
+            <div class="table-wrap">
+                <table class="table" id="location-table">
+                    <thead>
+                        <tr>
+                            <th>Location</th>
+                            <th>Total qty</th>
+                            <th>Qty out</th>
+                            <th>Maint</th>
+                            <th>Condition</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for form in formset.forms %}
+                            <tr class="location-row">
+                                <td>
+                                    {{ form.location }}
+                                    {{ form.location.errors }}
+                                    {{ form.id }}
+                                    {{ form.DELETE }}
+                                </td>
+                                <td>
+                                    {{ form.quantity_total }}
+                                    {{ form.quantity_total.errors }}
+                                </td>
+                                <td>
+                                    {{ form.quantity_out }}
+                                    {{ form.quantity_out.errors }}
+                                </td>
+                                <td>
+                                    {{ form.quantity_maintenance }}
+                                    {{ form.quantity_maintenance.errors }}
+                                </td>
+                                <td>
+                                    {{ form.condition }}
+                                    {{ form.condition.errors }}
+                                </td>
+                                <td>
+                                    {{ form.status }}
+                                    {{ form.status.errors }}
+                                </td>
+                                <td class="actions-cell">
+                                    <button type="button" class="button-link danger btn-sm remove-row" aria-label="Remove location">Remove</button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <button type="button" class="button-link secondary btn-sm" id="add-location-row" style="margin-top:8px;">+ Add location</button>
+        </div>
+
+        <h3 class="form-section-title">Media</h3>
+        <div class="form-row">
+            <div class="field-input-group">
+                <label class="label" for="{{ form.image.id_for_label }}">{{ form.image.label }}</label>
+                {{ form.image }}
+                {{ form.image.errors }}
+            </div>
+        </div>
+
+        <div class="actions">
+            <button type="submit" class="button-link">{% if is_edit %}Save changes{% else %}Add item{% endif %}</button>
+            <a class="button-link secondary" href="{% url 'inventory:dashboard' %}">Cancel</a>
+        </div>
     </form>
 </div>
 
 <script>
-    function toggleOther(selectEl, otherId) {
-        var other = document.getElementById(otherId);
-        if (!other) { return; }
-        var show = selectEl && selectEl.value === "Other";
-        other.style.display = show ? "" : "none";
-        var input = other.querySelector("input, textarea, select");
-        if (input) { input.required = show; }
-    }
     document.addEventListener("DOMContentLoaded", function () {
+        function toggleOther(selectEl, otherId) {
+            var other = document.getElementById(otherId);
+            if (!other) { return; }
+            var show = selectEl && selectEl.value === "Other";
+            other.style.display = show ? "" : "none";
+            var input = other.querySelector("input, textarea, select");
+            if (input) { input.required = show; }
+        }
         var pairs = [["id_category", "category-other-wrap"], ["id_subcategory", "subcategory-other-wrap"]];
         pairs.forEach(function (pair) {
             var sel = document.getElementById(pair[0]);
@@ -169,6 +166,118 @@
             toggleOther(sel, pair[1]);
             sel.addEventListener("change", function () { toggleOther(sel, pair[1]); });
         });
+
+        var tableBody = document.querySelector("#location-table tbody");
+        var addBtn = document.getElementById("add-location-row");
+        if (!tableBody || !addBtn) { return; }
+
+        function updateIndexes() {
+            var forms = tableBody.querySelectorAll(".location-row");
+            forms.forEach(function (row, index) {
+                var idInput = row.querySelector("input[id$='-id']");
+                if (idInput && idInput.name) {
+                    idInput.name = "form-" + index + "-id";
+                }
+                var locationInput = row.querySelector("select[id$='-location']");
+                if (locationInput && locationInput.name) {
+                    locationInput.name = "form-" + index + "-location";
+                }
+                var qtyInput = row.querySelector("input[id$='-quantity_total']");
+                if (qtyInput && qtyInput.name) {
+                    qtyInput.name = "form-" + index + "-quantity_total";
+                }
+                var outInput = row.querySelector("input[id$='-quantity_out']");
+                if (outInput && outInput.name) {
+                    outInput.name = "form-" + index + "-quantity_out";
+                }
+                var maintInput = row.querySelector("input[id$='-quantity_maintenance']");
+                if (maintInput && maintInput.name) {
+                    maintInput.name = "form-" + index + "-quantity_maintenance";
+                }
+                var condInput = row.querySelector("select[id$='-condition']");
+                if (condInput && condInput.name) {
+                    condInput.name = "form-" + index + "-condition";
+                }
+                var statusInput = row.querySelector("select[id$='-status']");
+                if (statusInput && statusInput.name) {
+                    statusInput.name = "form-" + index + "-status";
+                }
+                var delInput = row.querySelector("input[id$='-DELETE']");
+                if (delInput && delInput.name) {
+                    delInput.name = "form-" + index + "-DELETE";
+                }
+                var managementInput = row.querySelector("input[name='form-TOTAL_FORMS']");
+                if (managementInput) {
+                    managementInput.value = forms.length;
+                }
+            });
+        }
+
+        addBtn.addEventListener("click", function () {
+            var template = document.getElementById("empty-location-row");
+            if (!template) { return; }
+            var clone = template.content.cloneNode(true);
+            var row = clone.querySelector(".location-row");
+            if (row) {
+                tableBody.appendChild(row);
+                updateIndexes();
+            }
+        });
+
+        tableBody.addEventListener("click", function (event) {
+            var btn = event.target.closest(".remove-row");
+            if (!btn) { return; }
+            var row = btn.closest(".location-row");
+            if (!row) { return; }
+            var deleteInput = row.querySelector("input[type='checkbox'][id$='-DELETE']");
+            if (deleteInput) {
+                deleteInput.checked = true;
+                row.style.display = "none";
+            } else {
+                row.remove();
+                updateIndexes();
+            }
+        });
     });
 </script>
+
+<template id="empty-location-row">
+    <tr class="location-row">
+        <td>
+            <select name="form-__prefix__-location" class="select-input">
+                <option value="">Choose location</option>
+                {% for loc in formset.form.base_fields.location.queryset %}
+                    <option value="{{ loc.pk }}">{{ loc.name }}</option>
+                {% endfor %}
+            </select>
+            <input type="hidden" name="form-__prefix__-id" value="">
+            <input type="checkbox" name="form-__prefix__-DELETE" id="id_form-__prefix__-DELETE" style="display:none;">
+        </td>
+        <td><input type="number" name="form-__prefix__-quantity_total" value="0" min="0" class="text-input"></td>
+        <td><input type="number" name="form-__prefix__-quantity_out" value="0" min="0" class="text-input"></td>
+        <td><input type="number" name="form-__prefix__-quantity_maintenance" value="0" min="0" class="text-input"></td>
+        <td>
+            <select name="form-__prefix__-condition" class="select-input">
+                <option value="">—</option>
+                {% for cond in formset.form.base_fields.condition.queryset %}
+                    <option value="{{ cond.pk }}">{{ cond.name }}</option>
+                {% endfor %}
+            </select>
+        </td>
+        <td>
+            <select name="form-__prefix__-status" class="select-input">
+                <option value="">—</option>
+                {% for status in formset.form.base_fields.status.queryset %}
+                    <option value="{{ status.pk }}">{{ status.name }}</option>
+                {% endfor %}
+            </select>
+        </td>
+        <td class="actions-cell">
+            <button type="button" class="button-link danger btn-sm remove-row" aria-label="Remove location">Remove</button>
+        </td>
+    </tr>
+</template>
+
+{{ formset.management_form }}
+
 {% endblock %}
