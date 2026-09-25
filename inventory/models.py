@@ -1022,6 +1022,24 @@ def notify_request_received(request_obj):
     )
     notification.send_email()
     send_push_notification(request_obj.user, title, message)
+
+    admin_title = f"New {type_label} request — slip {request_obj.reference_code}"
+    admin_message = (
+        f"{request_obj.user.get_full_name() or request_obj.username} submitted a "
+        f"{type_label} request for {summary}.\n\n"
+        f"Slip code: {request_obj.reference_code}\n"
+        f"Status: awaiting approval"
+    )
+    for admin in User.objects.filter(is_superuser=True):
+        Notification.objects.create(
+            user=admin,
+            transaction=None,
+            category="request",
+            title=admin_title,
+            message=admin_message,
+        )
+        send_push_notification(admin, admin_title, admin_message)
+
     return notification
 
 
