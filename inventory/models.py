@@ -865,13 +865,17 @@ class Reminder(models.Model):
     REMINDER_TYPES = [
         ("overdue", "Overdue"),
         ("due_soon", "Due soon"),
+        ("upcoming_pickup_24h", "Upcoming pickup 24h"),
+        ("upcoming_pickup_1h", "Upcoming pickup 1h"),
+        ("upcoming_pickup_15min", "Upcoming pickup 15min"),
+        ("upcoming_pickup_admin_15min", "Upcoming pickup admin 15min"),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reminders")
     transaction = models.ForeignKey(
         Transaction, on_delete=models.CASCADE, related_name="reminders"
     )
-    reminder_type = models.CharField(max_length=20, choices=REMINDER_TYPES)
+    reminder_type = models.CharField(max_length=30, choices=REMINDER_TYPES)
     sent_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
