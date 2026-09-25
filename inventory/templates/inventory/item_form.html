@@ -146,6 +146,7 @@
             <button type="submit" class="button-link">{% if is_edit %}Save changes{% else %}Add item{% endif %}</button>
             <a class="button-link secondary" href="{% url 'inventory:dashboard' %}">Cancel</a>
         </div>
+        {{ formset.management_form }}
     </form>
 </div>
 
@@ -277,7 +278,5 @@
         </td>
     </tr>
 </template>
-
-{{ formset.management_form }}
 
 {% endblock %}
