@@ -5670,6 +5670,19 @@ form.is-loading::after {
     font-size: 0.8rem;
 }
 
+.product-card-location-text {
+    display: block;
+    padding: 6px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--surface-2);
+    border: 1px solid var(--border-soft);
+    color: var(--text-strong);
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: default;
+}
+
 .catalog-empty {
     grid-column: 1 / -1;
     text-align: center;
