@@ -3347,6 +3347,23 @@ document.addEventListener('DOMContentLoaded', function () {
                 badge.textContent = 'Out';
             }
             card.setAttribute('data-available', String(locationQty));
+            const entryMapRaw = card.getAttribute('data-entry-map') || '';
+            const entryMap = {};
+            entryMapRaw.split(',').forEach(function (pair) {
+                const parts = pair.split(':');
+                if (parts[0]) {
+                    entryMap[parts[0].trim()] = parts[1].trim();
+                }
+            });
+            const selectedLocationId = select.value;
+            const entryId = entryMap[selectedLocationId];
+            if (entryId) {
+                const hiddenItemId = card.querySelector('input[name="item_id"]');
+                if (hiddenItemId) {
+                    hiddenItemId.value = entryId;
+                }
+                card.setAttribute('data-item-id', entryId);
+            }
         });
     });
 

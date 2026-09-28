@@ -65,7 +65,7 @@
             <div class="product-grid" data-region="catalog-sections">
                 {% for group in items %}
                     {% with entries=group.entries catalog=group.catalog %}
-                    <article class="product-card" data-locations="{% for entry in entries %}{{ entry.location.name|escapejs }}:{{ entry.quantity_available }}{% if not forloop.last %},{% endif %}{% endfor %}" data-available="{{ group.total_available }}" data-category="{{ catalog.category }}" data-search="{{ entries.0.name }} {{ catalog.category }} {{ catalog.subcategory }} {{ catalog.description }}" data-item-id="{{ entries.0.pk }}">
+                    <article class="product-card" data-entry-map="{% for entry in entries %}{{ entry.location.pk }}:{{ entry.pk }}{% if not forloop.last %},{% endif %}{% endfor %}" data-locations="{% for entry in entries %}{{ entry.location.name|escapejs }}:{{ entry.quantity_available }}{% if not forloop.last %},{% endif %}{% endfor %}" data-available="{{ group.total_available }}" data-category="{{ catalog.category }}" data-search="{{ entries.0.name }} {{ catalog.category }} {{ catalog.subcategory }} {{ catalog.description }}" data-item-id="{{ entries.0.pk }}">
                         <div class="product-card-img">
                             {% if catalog.image %}
                                 <img src="{{ catalog.image.url }}" alt="{{ entries.0.name }}" loading="lazy">
