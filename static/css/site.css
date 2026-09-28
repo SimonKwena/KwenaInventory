@@ -5647,6 +5647,7 @@ form.is-loading::after {
     min-width: 0;
     font-size: 0.85rem;
     padding: 6px 10px;
+    min-width: 100px;
 }
 
 .product-card-actions .catalog-qty {
