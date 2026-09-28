@@ -5607,9 +5607,6 @@ form.is-loading::after {
 
 .product-card-body form {
     margin-top: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
 }
 
 .product-card-body h3 {
@@ -5630,7 +5627,8 @@ form.is-loading::after {
 
 .product-card-footer {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
     margin-top: auto;
 }
@@ -5647,7 +5645,6 @@ form.is-loading::after {
     min-width: 0;
     font-size: 0.85rem;
     padding: 6px 10px;
-    min-width: 100px;
 }
 
 .product-card-actions .catalog-qty {
@@ -5671,16 +5668,14 @@ form.is-loading::after {
 }
 
 .product-card-location-text {
-    display: block;
-    padding: 6px 10px;
-    border-radius: var(--radius-pill);
-    background: var(--surface-2);
-    border: 1px solid var(--border-soft);
-    color: var(--text-strong);
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    color: #e5e7eb;
     font-size: 0.85rem;
-    font-weight: 600;
     white-space: nowrap;
-    cursor: default;
 }
 
 .catalog-empty {
