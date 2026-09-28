@@ -751,12 +751,25 @@ function gearroomInit() {
             return true;
         }
 
+        function getSiblingChildren(parentRow) {
+            const children = [];
+            let sibling = parentRow.nextElementSibling;
+            while (sibling && sibling.classList.contains('location-child')) {
+                children.push(sibling);
+                sibling = sibling.nextElementSibling;
+            }
+            return children;
+        }
+
         function applyFilters() {
             const f = getFilters();
             const visible = [];
             dataRows.forEach(function (row) {
                 const match = rowMatches(row, f);
                 row.style.display = match ? '' : 'none';
+                getSiblingChildren(row).forEach(function (child) {
+                    child.style.display = match ? '' : 'none';
+                });
                 if (match) {
                     visible.push(row);
                 }
@@ -794,7 +807,11 @@ function gearroomInit() {
                 return;
             }
             visibleRows.forEach(function (row, index) {
-                row.style.display = expanded || index < PREVIEW_COUNT ? '' : 'none';
+                const show = expanded || index < PREVIEW_COUNT;
+                row.style.display = show ? '' : 'none';
+                getSiblingChildren(row).forEach(function (child) {
+                    child.style.display = show ? '' : 'none';
+                });
             });
             if (moreBtn) {
                 moreBtn.style.display = expanded ? 'none' : '';

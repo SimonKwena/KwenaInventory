@@ -2218,13 +2218,37 @@ def item_list(request):
     grouped = {}
     for entry in stock_entries:
         if entry.pk:
-            grouped.setdefault(entry.catalog_item, []).append(entry)
+            grouped.setdefault(entry.catalog_item, {}).setdefault(entry.location, []).append(entry)
 
     grouped_items = []
-    for catalog, entries in grouped.items():
-        total_available = sum(entry.quantity_available for entry in entries)
-        total_out = sum(entry.quantity_out for entry in entries)
-        total_qty = sum(entry.quantity_total for entry in entries)
+    for catalog, locations_dict in grouped.items():
+        entries = []
+        total_available = 0
+        total_out = 0
+        total_qty = 0
+        for location, location_entries in locations_dict.items():
+            representative = location_entries[0]
+            qty_total = sum(e.quantity_total for e in location_entries)
+            qty_out = sum(e.quantity_out for e in location_entries)
+            qty_maint = sum(e.quantity_maintenance for e in location_entries)
+            qty_available = max(0, qty_total - qty_out - qty_maint)
+            entries.append({
+                "pk": representative.pk,
+                "location": representative.location,
+                "condition": representative.condition,
+                "status": representative.status,
+                "quantity_total": qty_total,
+                "quantity_out": qty_out,
+                "quantity_maintenance": qty_maint,
+                "quantity_available": qty_available,
+                "name": representative.name,
+                "catalog_item": representative.catalog_item,
+            })
+            total_available += qty_available
+            total_out += qty_out
+            total_qty += qty_total
+        
+        entries.sort(key=lambda e: e["location"].name)
         grouped_items.append({
             "catalog": catalog,
             "entries": entries,
