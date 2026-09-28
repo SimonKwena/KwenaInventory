@@ -86,15 +86,6 @@
                             <span class="product-card-category">{{ catalog.category }}{% if catalog.subcategory %} &middot; {{ catalog.subcategory }}{% endif %}</span>
                             {% endif %}
                             <div class="product-card-footer">
-                                <div class="product-card-locations">
-                                    {% if entries|length == 1 %}
-                                        <span class="product-card-location-text">{{ entries.0.location.name }}</span>
-                                    {% else %}
-                                        {% for entry in entries %}
-                                            <span class="pill pill-neutral">{{ entry.location.name }} &middot; {{ entry.quantity_available }}</span>
-                                        {% endfor %}
-                                    {% endif %}
-                                </div>
                                 <form method="post" action="{% url 'inventory:cart_add' %}" class="cart-add-form catalog-add-form">
                                     {% csrf_token %}
                                     <input type="hidden" name="item_id" value="{{ entries.0.pk }}">
