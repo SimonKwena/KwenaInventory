@@ -178,48 +178,59 @@
                 var idInput = row.querySelector("input[id$='-id']");
                 if (idInput && idInput.name) {
                     idInput.name = "form-" + index + "-id";
+                    idInput.id = "id_form-" + index + "-id";
                 }
                 var locationInput = row.querySelector("select[id$='-location']");
                 if (locationInput && locationInput.name) {
                     locationInput.name = "form-" + index + "-location";
+                    locationInput.id = "id_form-" + index + "-location";
                 }
                 var qtyInput = row.querySelector("input[id$='-quantity_total']");
                 if (qtyInput && qtyInput.name) {
                     qtyInput.name = "form-" + index + "-quantity_total";
+                    qtyInput.id = "id_form-" + index + "-quantity_total";
                 }
                 var outInput = row.querySelector("input[id$='-quantity_out']");
                 if (outInput && outInput.name) {
                     outInput.name = "form-" + index + "-quantity_out";
+                    outInput.id = "id_form-" + index + "-quantity_out";
                 }
                 var maintInput = row.querySelector("input[id$='-quantity_maintenance']");
                 if (maintInput && maintInput.name) {
                     maintInput.name = "form-" + index + "-quantity_maintenance";
+                    maintInput.id = "id_form-" + index + "-quantity_maintenance";
                 }
                 var condInput = row.querySelector("select[id$='-condition']");
                 if (condInput && condInput.name) {
                     condInput.name = "form-" + index + "-condition";
+                    condInput.id = "id_form-" + index + "-condition";
                 }
                 var statusInput = row.querySelector("select[id$='-status']");
                 if (statusInput && statusInput.name) {
                     statusInput.name = "form-" + index + "-status";
+                    statusInput.id = "id_form-" + index + "-status";
                 }
                 var delInput = row.querySelector("input[id$='-DELETE']");
                 if (delInput && delInput.name) {
                     delInput.name = "form-" + index + "-DELETE";
-                }
-                var managementInput = row.querySelector("input[name='form-TOTAL_FORMS']");
-                if (managementInput) {
-                    managementInput.value = forms.length;
+                    delInput.id = "id_form-" + index + "-DELETE";
                 }
             });
+            var managementInput = document.querySelector("input[name='form-TOTAL_FORMS']");
+            if (managementInput) {
+                managementInput.value = forms.length;
+            }
         }
 
         addBtn.addEventListener("click", function () {
             var template = document.getElementById("empty-location-row");
             if (!template) { return; }
             var clone = template.content.cloneNode(true);
+            var forms = tableBody.querySelectorAll(".location-row");
+            var index = forms.length;
             var row = clone.querySelector(".location-row");
             if (row) {
+                row.innerHTML = row.innerHTML.replace(/__prefix__/g, index);
                 tableBody.appendChild(row);
                 updateIndexes();
             }
