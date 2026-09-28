@@ -87,19 +87,28 @@
                             {% endif %}
                             <div class="product-card-footer">
                                 <div class="product-card-locations">
-                                    {% for entry in entries %}
-                                        <span class="pill pill-neutral">{{ entry.location.name }} &middot; {{ entry.quantity_available }}</span>
-                                    {% endfor %}
+                                    {% if entries|length == 1 %}
+                                        <span class="product-card-location-text">{{ entries.0.location.name }}</span>
+                                    {% else %}
+                                        {% for entry in entries %}
+                                            <span class="pill pill-neutral">{{ entry.location.name }} &middot; {{ entry.quantity_available }}</span>
+                                        {% endfor %}
+                                    {% endif %}
                                 </div>
                                 <form method="post" action="{% url 'inventory:cart_add' %}" class="cart-add-form catalog-add-form">
                                     {% csrf_token %}
                                     <input type="hidden" name="item_id" value="{{ entries.0.pk }}">
                                     <div class="product-card-actions">
-                                        <select name="location_id" class="select-input catalog-location-select">
-                                            {% for entry in entries %}
-                                                <option value="{{ entry.location.pk }}">{{ entry.location.name }}</option>
-                                            {% endfor %}
-                                        </select>
+                                        {% if entries|length == 1 %}
+                                            <input type="hidden" name="location_id" value="{{ entries.0.location.pk }}">
+                                            <span class="product-card-location-text">{{ entries.0.location.name }}</span>
+                                        {% else %}
+                                            <select name="location_id" class="select-input catalog-location-select">
+                                                {% for entry in entries %}
+                                                    <option value="{{ entry.location.pk }}">{{ entry.location.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        {% endif %}
                                         <input type="number" class="text-input catalog-qty" value="1" min="1" max="{{ group.total_available|default:1 }}">
                                         <select name="action" class="select-input catalog-action-select">
                                             <option value="book_ahead">Book ahead</option>
@@ -124,4 +133,22 @@
             </div>
         </div>
     </div>
+
+    <style>
+        .product-card-locations {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .product-card-location-text {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            color: #e5e7eb;
+            font-size: 0.85rem;
+        }
+    </style>
 {% endblock %}
