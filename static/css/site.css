@@ -5638,33 +5638,31 @@ form.is-loading::after {
 }
 
 .product-card-actions {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 4px;
     align-items: center;
 }
 
 .product-card-actions .select-input {
-    font-size: 0.8rem;
-    padding: 5px 8px;
+    font-size: 0.72rem;
+    padding: 3px 6px;
 }
 
 .product-card-actions .catalog-qty {
-    width: 100%;
-    font-size: 0.8rem;
-    padding: 5px 4px;
+    width: 44px;
+    font-size: 0.72rem;
+    padding: 3px;
 }
 
 .product-card-actions .btn-sm {
-    justify-self: start;
-    padding: 5px 8px;
-    font-size: 0.75rem;
+    padding: 3px 8px;
+    font-size: 0.72rem;
 }
 
 .product-card-actions .catalog-details-link {
-    justify-self: start;
-    padding: 5px 8px;
-    font-size: 0.75rem;
+    padding: 3px 6px;
+    font-size: 0.72rem;
 }
 
 .product-card-location-text {
