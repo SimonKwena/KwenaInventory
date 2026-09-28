@@ -173,29 +173,27 @@ def visible_locations_for_role(role):
     """Return the base queryset of :class:`Location` rows a given role may see.
 
     A location with no ``roles`` links is considered visible to *everyone*, so
-    it is always included. Superadmin additionally sees every location (this
-    mirrors ``is_staff``/admin access: trusted staff can operate across all
-    locations)."""
+    it is always included. Superadmin additionally sees every location."""
     from .models import Location
 
-    if role in {ROLE_SUPERADMIN, ROLE_ADMIN, ROLE_STAFF}:
+    if role == ROLE_SUPERADMIN:
         return Location.objects.filter(is_active=True)
-    # Members: any location with no role restriction, plus locations that grant
-    # their specific role.
+    # All other roles: any location with no role restriction, plus locations
+    # that grant their specific role.
     return Location.objects.filter(is_active=True).filter(
         models_Q(roles=None) | models_Q(roles__slug=role)
     ).distinct()
 
 
 def visible_locations(user):
-    """Visible locations for a user, based on their role. Superadmin/staff see
-    all locations; members see only locations mapped to their role (and any
-    unrestricted location)."""
+    """Visible locations for a user, based on their role. Superadmin sees
+    all locations; everyone else sees only locations mapped to their role
+    (and any unrestricted location)."""
     from .models import Location
 
     if not user or not getattr(user, "is_authenticated", False):
         return Location.objects.none()
-    if is_staff_role(user):
+    if is_superadmin(user):
         return Location.objects.filter(is_active=True)
     return visible_locations_for_role(role_of(user))
 
@@ -204,7 +202,7 @@ def location_is_visible(user, location):
     """True when ``location`` is visible to ``user``."""
     if not user or not getattr(user, "is_authenticated", False):
         return False
-    if is_staff_role(user):
+    if is_superadmin(user):
         return location.is_active
     if not location.is_active:
         return False

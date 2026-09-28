@@ -101,7 +101,7 @@ def item_lookup(request):
             .select_related("catalog_item", "location")
             .first()
         )
-    if stock_entry and not request.user.is_staff and not location_is_visible(request.user, stock_entry.location):
+    if stock_entry and not is_superadmin(request.user) and not location_is_visible(request.user, stock_entry.location):
         stock_entry = None
     if not stock_entry:
         return JsonResponse({"found": False})
@@ -541,7 +541,7 @@ def catalog(request):
         .select_related("location", "status")
         .order_by("catalog_item__category", "catalog_item__subcategory", "catalog_item__name")
     )
-    if not request.user.is_staff:
+    if not is_superadmin(request.user):
         item_qs = item_qs.filter(location__in=visible_locations(request.user))
     if q:
         item_qs = item_qs.filter(
@@ -2206,7 +2206,7 @@ def request_edit(request, pk):
 @ensure_csrf_cookie
 def item_detail(request, pk):
     stock_entry = StockEntry.objects.select_related("catalog_item", "location").get(pk=pk)
-    if not request.user.is_staff and not location_is_visible(request.user, stock_entry.location):
+    if not is_superadmin(request.user) and not location_is_visible(request.user, stock_entry.location):
         messages.error(request, "You do not have access to that location.")
         return redirect("inventory:catalog")
     all_entries = StockEntry.objects.filter(catalog_item=stock_entry.catalog_item).select_related("catalog_item", "location", "condition", "status").order_by("location__name")
