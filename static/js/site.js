@@ -2496,7 +2496,7 @@ function initOnboarding() {
                 'x-requested-with': 'XMLHttpRequest',
                 'X-CSRFToken': csrf,
             },
-            body: body.toString(),
+            body: body,
             credentials: 'same-origin',
         }).catch(function () {
             if (permanent) {
