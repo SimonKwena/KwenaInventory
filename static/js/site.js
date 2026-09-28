@@ -3200,20 +3200,37 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (!info) return;
                         const badge = card.querySelector('.product-card-badge');
                         if (!badge) return;
-                        if (info.available > 0) {
+                        const locationSelect = card.querySelector('.catalog-location-select');
+                        const locationId = locationSelect ? locationSelect.value : null;
+                        const locationsRaw = card.getAttribute('data-locations') || '';
+                        const locationMap = {};
+                        locationsRaw.split(',').forEach(function (pair) {
+                            const parts = pair.split(':');
+                            if (parts[0]) {
+                                locationMap[parts[0].trim()] = parseInt(parts[1] || '0', 10);
+                            }
+                        });
+                        let available = info.available;
+                        if (locationSelect && locationId) {
+                            const selectedText = locationSelect.options[locationSelect.selectedIndex] ? locationSelect.options[locationSelect.selectedIndex].text.trim() : '';
+                            if (selectedText && locationMap[selectedText] !== undefined) {
+                                available = locationMap[selectedText];
+                            }
+                        }
+                        if (available > 0) {
                             badge.className = 'pill pill-success product-card-badge';
-                            badge.textContent = info.available + ' in stock';
+                            badge.textContent = available + ' in stock';
                         } else {
                             badge.className = 'pill pill-danger product-card-badge';
                             badge.textContent = 'Out';
                         }
-                        card.setAttribute('data-available', String(info.available));
+                        card.setAttribute('data-available', String(available));
                         const qtyInput = card.querySelector('.catalog-qty');
-                        if (qtyInput && parseInt(qtyInput.value, 10) > info.available) {
-                            qtyInput.value = Math.max(1, info.available);
+                        if (qtyInput && parseInt(qtyInput.value, 10) > available) {
+                            qtyInput.value = Math.max(1, available);
                         }
                         if (qtyInput) {
-                            qtyInput.max = Math.max(1, info.available);
+                            qtyInput.max = Math.max(1, available);
                         }
                         const hiddenQty = card.querySelector('.catalog-qty-hidden');
                         if (hiddenQty) {
@@ -3233,6 +3250,43 @@ document.addEventListener('DOMContentLoaded', function () {
         setInterval(updateCatalogStock, 3000);
         updateCatalogStock();
     }
+
+    document.querySelectorAll('.catalog-location-select').forEach(function (select) {
+        select.addEventListener('change', function () {
+            const card = select.closest('.product-card');
+            if (!card) return;
+            const badge = card.querySelector('.product-card-badge');
+            if (!badge) return;
+            const locationsRaw = card.getAttribute('data-locations') || '';
+            const selectedText = select.options[select.selectedIndex] ? select.options[select.selectedIndex].text.trim() : '';
+            let locationQty = 0;
+            locationsRaw.split(',').forEach(function (pair) {
+                const parts = pair.split(':');
+                if (parts[0] && parts[0].trim() === selectedText) {
+                    locationQty = parseInt(parts[1] || '0', 10);
+                }
+            });
+            const qtyInput = card.querySelector('.catalog-qty');
+            if (qtyInput) {
+                qtyInput.max = Math.max(1, locationQty);
+                if (parseInt(qtyInput.value, 10) > locationQty) {
+                    qtyInput.value = Math.max(1, locationQty);
+                }
+            }
+            const hiddenQty = card.querySelector('.catalog-qty-hidden');
+            if (hiddenQty && qtyInput) {
+                hiddenQty.value = qtyInput.value;
+            }
+            if (locationQty > 0) {
+                badge.className = 'pill pill-success product-card-badge';
+                badge.textContent = locationQty + ' in stock';
+            } else {
+                badge.className = 'pill pill-danger product-card-badge';
+                badge.textContent = 'Out';
+            }
+            card.setAttribute('data-available', String(locationQty));
+        });
+    });
 
     const backToTop = document.getElementById('back-to-top');
     if (backToTop) {
