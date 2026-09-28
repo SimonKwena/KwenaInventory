@@ -5608,8 +5608,9 @@ form.is-loading::after {
 .product-card-body form {
     margin-top: auto;
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 8px;
+    align-items: center;
 }
 
 .product-card-body h3 {
@@ -5746,5 +5747,12 @@ form.is-loading::after {
 
     .product-card-actions .catalog-qty {
         width: 48px;
+    }
+}
+
+@media (max-width: 380px) {
+    .catalog-layout .product-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
     }
 }
