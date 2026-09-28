@@ -53,6 +53,7 @@ urlpatterns = [
     path("live/state/", views.live_state, name="live_state"),
     path("live/region/", views.live_region, name="live_region"),
     path("catalog/stock/", views.catalog_stock, name="catalog_stock"),
+    path("kits/<int:pk>/items/", views.kit_items, name="kit_items"),
     path("items/", views.item_list, name="item_list"),
     path("items/new/", views.item_create, name="item_create"),
     path("items/<int:pk>/edit/", views.item_edit, name="item_edit"),

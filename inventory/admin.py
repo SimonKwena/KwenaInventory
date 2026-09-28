@@ -5,6 +5,8 @@ from .models import (
     CatalogItem,
     ConditionOption,
     GuestProfile,
+    Kit,
+    KitItem,
     Location,
     LocationRole,
     Maintenance,
@@ -157,6 +159,21 @@ class StockTakeItemAdmin(admin.ModelAdmin):
     list_display = ("stock_take", "item", "counted_quantity", "expected_quantity", "difference")
     list_filter = ("stock_take",)
     search_fields = ("item__catalog_item__name", "item__catalog_item__sku")
+
+
+class KitItemInline(admin.TabularInline):
+    model = KitItem
+    extra = 1
+    autocomplete_fields = ("item",)
+
+
+@admin.register(Kit)
+class KitAdmin(admin.ModelAdmin):
+    list_display = ("name", "created_by", "is_active", "created_at")
+    search_fields = ("name", "description")
+    list_filter = ("is_active", "created_by")
+    inlines = [KitItemInline]
+    readonly_fields = ("created_at",)
 
 
 _SETTINGS_VIEW_URL = "/admin/settings-view/"

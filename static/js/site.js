@@ -1472,6 +1472,10 @@ function gearroomInit() {
             homeForm.reset();
             resetItemRows();
             setLoanLock(false);
+            const kitSel = document.querySelector('#kit-select');
+            if (kitSel) {
+                kitSel.value = '';
+            }
             // Clear any slip-applied locks/mirrors left on item rows.
             homeForm.querySelectorAll('.item-row.locked, .item-row.prefilled').forEach(function (row) {
                 row.classList.remove('locked', 'prefilled');
@@ -1534,6 +1538,64 @@ function gearroomInit() {
             syncCondAllRowVisibility();
         });
         }
+    }
+
+    /* ---------- Admin kits ---------- */
+    const kitSelect = document.querySelector('#kit-select');
+    if (kitSelect && itemRowsContainer) {
+        kitSelect.addEventListener('change', function () {
+            const pk = (this.value || '').trim();
+            if (!pk) {
+                return;
+            }
+            fetch(appUrl('kits/' + pk + '/items/'), {
+                method: 'GET',
+                headers: { 'x-requested-with': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            })
+            .then(function (resp) { return resp.ok ? resp.json() : Promise.reject('HTTP ' + resp.status); })
+            .then(function (data) {
+                if (!data || !data.items || !data.items.length) {
+                    return;
+                }
+                const sampleItem = document.querySelector('#item-rows select[name="item_ids"]');
+                const sampleLoc = document.querySelector('#item-rows select[name="location_ids"]');
+                const sampleCond = document.querySelector('#item-rows select[name="condition_ids"]');
+                const itemOptions = sampleItem ? sampleItem.innerHTML : '';
+                const locOptions = sampleLoc ? sampleLoc.innerHTML : '';
+                const condOptions = sampleCond ? sampleCond.innerHTML : '<option value="">No update</option>';
+                itemRowsContainer.innerHTML = '';
+                data.items.forEach(function (line) {
+                    const row = document.createElement('div');
+                    row.className = 'item-row';
+                    row.innerHTML =
+                        '<div><label class="label">Location</label>' +
+                        '<select name="location_ids">' + locOptions + '</select></div>' +
+                        '<div><label class="label">Item</label>' +
+                        '<select name="item_ids">' + itemOptions + '</select></div>' +
+                        '<div><label class="label">Quantity</label><input type="number" name="quantities" value="' + (line.quantity || 1) + '" min="1"></div>' +
+                        '<div class="condition-field"><label class="label">Condition</label><select name="condition_ids">' + condOptions + '</select></div>' +
+                        '<div class="item-row-remove"><button type="button" class="button-link danger btn-sm remove-row" aria-label="Remove this item row" title="Remove this item row"><span aria-hidden="true">&times;</span></button></div>';
+                    itemRowsContainer.appendChild(row);
+                    const locSel = row.querySelector('select[name="location_ids"]');
+                    const itemSel = row.querySelector('select[name="item_ids"]');
+                    if (locSel && line.location_id) {
+                        locSel.value = String(line.location_id);
+                    }
+                    if (itemSel && line.item_id) {
+                        itemSel.value = String(line.item_id);
+                    }
+                    if (locSel && itemSel) {
+                        filterItemsByLocation(row);
+                    }
+                });
+                syncRemoveButtonStates();
+                syncCondAllRowVisibility();
+            })
+            .catch(function () {
+                showToast('Could not load kit. Please try again.', { kind: 'error' });
+            });
+        });
     }
 
     /* ---------- Camera QR scanners ---------- */

@@ -37,6 +37,17 @@
                 </div>
             </div>
             {% endif %}
+            {% if is_admin_quick_action %}
+            <div class="form-row" id="kit-select-row">
+                <label class="label" for="kit-select">Kit</label>
+                <select name="kit" id="kit-select" class="kit-select">
+                    <option value="">— Choose a kit —</option>
+                    {% for kit in kits %}
+                        <option value="{{ kit.pk }}">{{ kit.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
             <div data-region="home-qa-loans">
             {% if active_loans %}
                 <div class="form-row checkin-loan-field" id="checkin-loan-field" style="display:none;">

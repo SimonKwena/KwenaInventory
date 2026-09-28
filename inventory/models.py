@@ -812,6 +812,42 @@ class StockTakeItem(models.Model):
         super().save(*args, **kwargs)
 
 
+class Kit(models.Model):
+    """A named preset of items and quantities for quick check-out.
+
+    Kits are personal to the admin who creates them. Selecting a kit in
+    Quick Action auto-fills the item rows; submitting still creates a
+    normal multi-item Request and moves stock exactly as before.
+    """
+
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="kits")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class KitItem(models.Model):
+    """One line inside a :class:`Kit`."""
+
+    kit = models.ForeignKey(Kit, on_delete=models.CASCADE, related_name="items")
+    item = models.ForeignKey("StockEntry", on_delete=models.PROTECT, related_name="kit_items")
+    quantity = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ["kit__name", "id"]
+        unique_together = [("kit", "item")]
+
+    def __str__(self):
+        return f"{self.quantity} x {self.item.name} in {self.kit.name}"
+
+
 class Notification(models.Model):
     """A personal notification for a single user, e.g. when an admin updates the
     status of a reservation or request. Distinct from Announcement, which is

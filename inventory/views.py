@@ -37,6 +37,8 @@ from .models import (
     CatalogItem,
     ConditionOption,
     GuestProfile,
+    Kit,
+    KitItem,
     Location,
     Maintenance,
     Notification,
@@ -528,6 +530,7 @@ def staff_home(request):
             "can_check_out": can_check_out(request.user),
             "can_check_in": can_check_in(request.user, has_active_gear),
             "active_loans": active_loans,
+            "kits": Kit.objects.filter(is_active=True, created_by=request.user).order_by("name"),
         },
     )
 
@@ -2017,6 +2020,27 @@ def request_lookup_code(request):
             "items": items,
         }
     )
+
+
+@login_required
+def kit_items(request, pk):
+    """Return the lines for a staff-only kit so Quick Action can auto-fill rows."""
+    kit = get_object_or_404(Kit, pk=pk, is_active=True, created_by=request.user)
+    data = {
+        "name": kit.name,
+        "items": [
+            {
+                "item_id": line.item_id,
+                "name": line.item.name if line.item else "",
+                "location_id": line.item.location_id if line.item else None,
+                "location_name": line.item.location.name if line.item and line.item.location else "",
+                "quantity": line.quantity,
+                "quantity_available": line.item.quantity_available if line.item else 0,
+            }
+            for line in kit.items.select_related("item__location").all()
+        ],
+    }
+    return JsonResponse(data)
 
 
 @login_required
