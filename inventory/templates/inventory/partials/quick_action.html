@@ -85,7 +85,7 @@
                           <select name="item_ids" required class="qa-item-select" disabled>
                               <option value="">Choose an item</option>
                               {% for item in items %}
-                                  <option value="{{ item.id }}" data-location-id="{{ item.location.id }}">{{ item.name }}</option>
+                                   <option value="{{ item.id }}" data-location-id="{{ item.location.id }}">{{ item.name }} &middot; {{ item.quantity_available }} available</option>
                               {% endfor %}
                           </select>
                       </div>
