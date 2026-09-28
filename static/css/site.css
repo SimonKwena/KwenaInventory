@@ -5597,10 +5597,10 @@ form.is-loading::after {
 }
 
 .product-card-body {
-    padding: 10px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     flex: 1;
     min-width: 0;
 }
@@ -5667,17 +5667,6 @@ form.is-loading::after {
     align-self: center;
     padding: 6px 10px;
     font-size: 0.8rem;
-}
-
-.product-card-location-text {
-    display: inline-flex;
-    align-items: center;
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: rgba(255,255,255,0.08);
-    color: #e5e7eb;
-    font-size: 0.85rem;
-    white-space: nowrap;
 }
 
 .catalog-empty {
