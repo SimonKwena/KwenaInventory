@@ -720,6 +720,21 @@ function gearroomInit() {
         });
         let currentVisible = dataRows.slice();
 
+        const childRowMap = {};
+        rows.forEach(function (row) {
+            const parentPk = row.getAttribute('data-parent-pk');
+            if (parentPk) {
+                if (!childRowMap[parentPk]) {
+                    childRowMap[parentPk] = [];
+                }
+                childRowMap[parentPk].push(row);
+            }
+        });
+
+        function getChildren(parentRow) {
+            return childRowMap[parentRow.getAttribute('data-pk')] || [];
+        }
+
         function getFilters() {
             return {
                 search: (searchInput ? searchInput.value : '').trim().toLowerCase(),
@@ -751,23 +766,13 @@ function gearroomInit() {
             return true;
         }
 
-        function getSiblingChildren(parentRow) {
-            const children = [];
-            let sibling = parentRow.nextElementSibling;
-            while (sibling && sibling.classList.contains('location-child')) {
-                children.push(sibling);
-                sibling = sibling.nextElementSibling;
-            }
-            return children;
-        }
-
         function applyFilters() {
             const f = getFilters();
             const visible = [];
             dataRows.forEach(function (row) {
                 const match = rowMatches(row, f);
                 row.style.display = match ? '' : 'none';
-                getSiblingChildren(row).forEach(function (child) {
+                getChildren(row).forEach(function (child) {
                     child.style.display = match ? '' : 'none';
                 });
                 if (match) {
@@ -804,12 +809,18 @@ function gearroomInit() {
                 if (moreBtn) {
                     moreBtn.style.display = 'none';
                 }
+                visibleRows.forEach(function (row) {
+                    row.style.display = '';
+                    getChildren(row).forEach(function (child) {
+                        child.style.display = '';
+                    });
+                });
                 return;
             }
             visibleRows.forEach(function (row, index) {
                 const show = expanded || index < PREVIEW_COUNT;
                 row.style.display = show ? '' : 'none';
-                getSiblingChildren(row).forEach(function (child) {
+                getChildren(row).forEach(function (child) {
                     child.style.display = show ? '' : 'none';
                 });
             });
