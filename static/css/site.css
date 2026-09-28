@@ -5638,35 +5638,31 @@ form.is-loading::after {
 }
 
 .product-card-actions {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
     gap: 4px;
     align-items: center;
 }
 
 .product-card-actions .select-input {
-    flex: 1 1 auto;
-    min-width: 0;
     font-size: 0.8rem;
     padding: 5px 8px;
 }
 
 .product-card-actions .catalog-qty {
-    width: 56px;
-    flex: 0 0 auto;
+    width: 100%;
     font-size: 0.8rem;
     padding: 5px 4px;
 }
 
 .product-card-actions .btn-sm {
-    flex: 0 0 auto;
+    justify-self: start;
     padding: 5px 8px;
     font-size: 0.75rem;
 }
 
 .product-card-actions .catalog-details-link {
-    flex: 0 0 auto;
-    align-self: center;
+    justify-self: start;
     padding: 5px 8px;
     font-size: 0.75rem;
 }
