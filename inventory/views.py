@@ -552,17 +552,32 @@ def catalog(request):
             | Q(description__icontains=q)
         )
     items = list(item_qs)
+    grouped = {}
     for item in items:
-        desc = (item.catalog_item.description or "").strip()
-        item.type_label = desc if not desc.startswith("Imported from") else ""
-        item.group_label = (item.catalog_item.category or "").strip() or (item.type_label or "Items")
-    categories = sorted({item.group_label for item in items if item.group_label})
+        grouped.setdefault(item.catalog_item, []).append(item)
+
+    grouped_items = []
+    for catalog, entries in grouped.items():
+        total_available = sum(i.quantity_available for i in entries)
+        grouped_items.append({
+            "catalog": catalog,
+            "entries": entries,
+            "total_available": total_available,
+        })
+
+    for group in grouped_items:
+        first = group["entries"][0]
+        desc = (group["catalog"].description or "").strip()
+        first.type_label = desc if not desc.startswith("Imported from") else ""
+        first.group_label = (group["catalog"].category or "").strip() or (first.type_label or "Items")
+
+    categories = sorted({group["entries"][0].group_label for group in grouped_items if group["entries"][0].group_label})
     locations = visible_locations(request.user).order_by("name")
     return render(
         request,
         "inventory/catalog.html",
         {
-            "items": items,
+            "items": grouped_items,
             "locations": locations,
             "categories": categories,
             "can_check_out": can_check_out(request.user),

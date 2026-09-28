@@ -571,13 +571,13 @@ function gearroomInit() {
         const cards = document.querySelectorAll('.product-card');
         let totalVisible = 0;
         cards.forEach(function (card) {
-            const location = card.getAttribute('data-location') || '';
+            const locations = (card.getAttribute('data-locations') || '').split(',').filter(Boolean);
             const available = parseInt(card.getAttribute('data-available') || '0', 10);
             const category = card.getAttribute('data-category') || '';
             const search = card.getAttribute('data-search') || '';
             let match = true;
             if (f.categories.length && f.categories.indexOf(category) === -1) match = false;
-            if (f.location && location !== f.location) match = false;
+            if (f.location && locations.indexOf(f.location) === -1) match = false;
             if (f.availability === 'available' && available <= 0) match = false;
             if (f.availability === 'out' && available > 0) match = false;
             if (f.search && search.toLowerCase().indexOf(f.search) === -1) match = false;
