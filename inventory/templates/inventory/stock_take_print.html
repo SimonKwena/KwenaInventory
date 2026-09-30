@@ -87,7 +87,15 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.82rem;
+            table-layout: fixed;
         }
+        col.col-num { width: 36px; }
+        col.col-item { width: 32%; }
+        col.col-type { width: 28%; }
+        col.col-qty { width: 11%; }
+        col.col-out { width: 11%; }
+        col.col-maint { width: 11%; }
+        col.col-avail { width: 11%; }
         thead th {
             text-align: left;
             padding: 7px 8px;
@@ -161,9 +169,18 @@
             <div class="sheet-section">
                 <div class="sheet-section-title">{{ selected_location.name }}</div>
                 <table>
+                    <colgroup>
+                        <col class="col-num">
+                        <col class="col-item">
+                        <col class="col-type">
+                        <col class="col-qty">
+                        <col class="col-out">
+                        <col class="col-maint">
+                        <col class="col-avail">
+                    </colgroup>
                     <thead>
                         <tr>
-                            <th style="width:36px">#</th>
+                            <th>#</th>
                             <th>Item</th>
                             <th>Type</th>
                             <th class="text-right">Total</th>
@@ -195,9 +212,18 @@
             <div class="sheet-section">
                 <div class="sheet-section-title">{{ loc_name }} &middot; {{ loc_items|length }} item{{ loc_items|length|pluralize }}</div>
                 <table>
+                    <colgroup>
+                        <col class="col-num">
+                        <col class="col-item">
+                        <col class="col-type">
+                        <col class="col-qty">
+                        <col class="col-out">
+                        <col class="col-maint">
+                        <col class="col-avail">
+                    </colgroup>
                     <thead>
                         <tr>
-                            <th style="width:36px">#</th>
+                            <th>#</th>
                             <th>Item</th>
                             <th>Type</th>
                             <th class="text-right">Total</th>
