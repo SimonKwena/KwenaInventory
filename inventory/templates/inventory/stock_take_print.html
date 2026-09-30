@@ -80,7 +80,7 @@
             text-transform: uppercase;
             color: #444;
             margin: 0 0 8px 0;
-            padding-bottom: 4px;
+            padding: 0 0 4px 8px;
             border-bottom: 1px solid #ddd;
         }
         table {
@@ -151,7 +151,7 @@
                 Showing stock for all active locations
             {% endif %}
             {% if selected_category or selected_subcategory %}
-                &middot; Category: <strong>{{ selected_category|default:"All" }}</strong>{% if selected_subcategory %} / <strong>{{ selected_subcategory }}</strong>{% endif %}
+                &middot; Category: <strong>{{ selected_category|default:"All" }}</strong>{% if selected_subcategory %} &middot; <strong>{{ selected_subcategory }}</strong>{% endif %}
             {% endif %}
             &middot; {{ items|length }} item{{ items|length|pluralize }}
         </p>
