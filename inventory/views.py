@@ -2743,6 +2743,20 @@ def stock_take_list(request):
     if status_filter:
         takes = takes.filter(status=status_filter)
     locations = Location.objects.filter(is_active=True).order_by("name")
+    categories = list(
+        CatalogItem.objects.exclude(category__isnull=True)
+        .exclude(category="")
+        .values_list("category", flat=True)
+        .distinct()
+        .order_by("category")
+    )
+    subcategories = list(
+        CatalogItem.objects.exclude(subcategory__isnull=True)
+        .exclude(subcategory="")
+        .values_list("subcategory", flat=True)
+        .distinct()
+        .order_by("subcategory")
+    )
 
     total_takes = all_takes.count()
     complete_count = all_takes.filter(status="complete").count()
@@ -2772,6 +2786,8 @@ def stock_take_list(request):
             "total_items_counted": total_items_counted,
             "total_discrepancy": total_discrepancy,
             "recent_takes": recent_takes,
+            "categories": categories,
+            "subcategories": subcategories,
         },
     )
 
@@ -2900,11 +2916,13 @@ def stock_take_print(request):
     """Print current stock levels for a selected location or all locations."""
     locations = Location.objects.filter(is_active=True).order_by("name")
     location_id = request.GET.get("location", "")
+    category = request.GET.get("category", "")
+    subcategory = request.GET.get("subcategory", "")
 
     items = (
         StockEntry.objects.select_related("catalog_item", "location", "condition", "status")
         .filter(is_active=True)
-        .order_by("location__name", "catalog_item__name")
+        .order_by("location__name", "catalog_item__category", "catalog_item__subcategory", "catalog_item__name")
     )
 
     selected_location = None
@@ -2915,10 +2933,30 @@ def stock_take_print(request):
         except (ValueError, Location.DoesNotExist):
             selected_location = None
 
+    if category:
+        items = items.filter(catalog_item__category=category)
+    if subcategory:
+        items = items.filter(catalog_item__subcategory=subcategory)
+
     grouped = {}
     for item in items:
         loc_name = item.location.name
         grouped.setdefault(loc_name, []).append(item)
+
+    categories = list(
+        CatalogItem.objects.exclude(category__isnull=True)
+        .exclude(category="")
+        .values_list("category", flat=True)
+        .distinct()
+        .order_by("category")
+    )
+    subcategories = list(
+        CatalogItem.objects.exclude(subcategory__isnull=True)
+        .exclude(subcategory="")
+        .values_list("subcategory", flat=True)
+        .distinct()
+        .order_by("subcategory")
+    )
 
     return render(
         request,
@@ -2929,6 +2967,10 @@ def stock_take_print(request):
             "grouped": grouped,
             "items": items,
             "printed_at": timezone.now(),
+            "categories": categories,
+            "subcategories": subcategories,
+            "selected_category": category,
+            "selected_subcategory": subcategory,
         },
     )
 

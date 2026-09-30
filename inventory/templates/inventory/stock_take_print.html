@@ -150,6 +150,9 @@
             {% else %}
                 Showing stock for all active locations
             {% endif %}
+            {% if selected_category or selected_subcategory %}
+                &middot; Category: <strong>{{ selected_category|default:"All" }}</strong>{% if selected_subcategory %} / <strong>{{ selected_subcategory }}</strong>{% endif %}
+            {% endif %}
             &middot; {{ items|length }} item{{ items|length|pluralize }}
         </p>
 
