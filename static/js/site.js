@@ -2169,7 +2169,7 @@ function gearroomInit() {
                     opt.style.display = '';
                     return;
                 }
-                const match = !locId || opt.getAttribute('data-location-id') === locId;
+                const match = !!locId && opt.getAttribute('data-location-id') === locId;
                 opt.style.display = match ? '' : 'none';
             });
             if (currentItemId) {
