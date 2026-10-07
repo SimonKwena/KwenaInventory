@@ -2108,6 +2108,26 @@ function gearroomInit() {
                         }
                     });
                 }
+                if (inputField && inputField.id === 'maintenance-scan-asset') {
+                    const itemSelect = document.querySelector('#id_item');
+                    const locSelect = document.querySelector('#id_location');
+                    if (itemSelect) {
+                        const match = Array.prototype.slice.call(itemSelect.options)
+                            .some(function (opt) { return opt.value === String(itemId); });
+                        if (match) {
+                            itemSelect.value = String(itemId);
+                            itemSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+                    if (locSelect && locationId) {
+                        const match = Array.prototype.slice.call(locSelect.options)
+                            .some(function (opt) { return opt.value === String(locationId); });
+                        if (match) {
+                            locSelect.value = String(locationId);
+                            locSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+                }
             }
             inputField.dispatchEvent(new Event('input', { bubbles: true }));
             stopCamera();

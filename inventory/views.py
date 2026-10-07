@@ -2509,7 +2509,8 @@ def maintenance_start(request):
         quantity=quantity,
         location=form.cleaned_data.get("location"),
     )
-    messages.success(request, f"{quantity} x {item.name} moved to maintenance.")
+    applied_quantity = record.quantity
+    messages.success(request, f"{applied_quantity} x {item.name} moved to maintenance.")
     return redirect("inventory:maintenance")
 
 

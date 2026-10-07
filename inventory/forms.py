@@ -477,7 +477,7 @@ class MaintenanceForm(forms.Form):
     )
     location = forms.ModelChoiceField(
         queryset=Location.objects.filter(is_active=True).order_by("name"),
-        required=True,
+        required=False,
         label="Location (where it is for service)",
     )
     quantity = forms.IntegerField(min_value=1, initial=1, label="Quantity", required=True)
@@ -507,8 +507,13 @@ class MaintenanceForm(forms.Form):
                 cleaned["item"] = item
         if not cleaned.get("item"):
             self.add_error("item", "Choose an item or scan its QR code.")
-        if not cleaned.get("location") and cleaned.get("item"):
-            cleaned["location"] = cleaned["item"].location
+        quantity = cleaned.get("quantity") or 1
+        item = cleaned.get("item")
+        if item and quantity > (item.quantity_available or 0):
+            self.add_error(
+                "quantity",
+                f"Only {item.quantity_available} unit(s) available. You asked for {quantity}.",
+            )
         return cleaned
 
 
