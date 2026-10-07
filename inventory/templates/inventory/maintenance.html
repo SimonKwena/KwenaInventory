@@ -3,100 +3,161 @@
 {% block title %}Maintenance | Kwena Gear Room{% endblock %}
 
 {% block content %}
-    <div class="card">
-        <div class="action-bar">
-            <div>
-                <h2>Maintenance</h2>
-                {% if is_staff %}
-                <p class="section-note">Track gear out for repair or servicing, manage open jobs, and return or write off items when done.</p>
-                <div class="stat-grid" data-region="maintenance-stats">
-                    <div class="stat"><div class="stat-value">{{ total_in_maintenance }}</div><div class="stat-label">Items out for service</div></div>
-                </div>
-                {% else %}
-                <p class="section-note">Send gear out for repair or servicing and follow the status of the items you reported.</p>
-                {% endif %}
-            </div>
-        <div class="actions">
+<div class="card">
+    <div class="action-bar">
+        <div>
+            <h2>Maintenance</h2>
             {% if is_staff %}
-            <button type="button" class="button-link secondary" id="toggle-manage-items" aria-expanded="true" aria-controls="manage-maintenance-items">Close</button>
+            <p class="section-note">Track gear out for repair or servicing, manage open jobs, and return or write off items when done.</p>
+            <div class="stat-grid" data-region="maintenance-stats">
+                <div class="stat"><div class="stat-value">{{ stats.pending_approval }}</div><div class="stat-label">Pending Approval</div></div>
+                <div class="stat"><div class="stat-value">{{ stats.awaiting_collection }}</div><div class="stat-label">Awaiting Collection</div></div>
+                <div class="stat"><div class="stat-value">{{ stats.in_service }}</div><div class="stat-label">In Service</div></div>
+                <div class="stat"><div class="stat-value">{{ stats.completed }}</div><div class="stat-label">Completed</div></div>
+            </div>
+            {% else %}
+            <p class="section-note">Send gear out for repair or servicing and follow the status of the items you reported.</p>
             {% endif %}
         </div>
+    <div class="actions">
+        {% if is_staff %}
+        <button type="button" class="button-link secondary" id="toggle-manage-items" aria-expanded="true" aria-controls="manage-maintenance-items">Close</button>
+        {% endif %}
     </div>
+</div>
 </div>
 
 {% if is_staff %}
-<div class="card" id="manage-maintenance-items" data-region="manage-maintenance" {% if not is_staff %}style="display:none;"{% endif %}>
-    <h3>Manage items in maintenance</h3>
-    <p class="section-note">Close out each open job. <strong>Return</strong> puts the units back into available stock once fixed; <strong>Could not be fixed</strong> writes the units off (removed from total stock). Both record who closed the job and any notes.</p>
-    <div class="table-wrapper" aria-live="polite">
+<div class="card" id="manage-maintenance-items" data-region="manage-maintenance">
+    <h3>Pending Approval</h3>
+    <p class="section-note">Items reported by teachers waiting for superadmin approval.</p>
+    {% if pending_approval %}
+    <div class="table-wrapper">
         <table>
             <thead>
-                <tr><th>Item</th><th>Qty</th><th>Location</th><th>Reported by</th><th>Expected back</th><th>Reason</th><th>Notes</th><th>Actions</th></tr>
+                <tr><th>Item</th><th>Qty</th><th>Location</th><th>Reported by</th><th>Expected back</th><th>Reason</th><th>Actions</th></tr>
             </thead>
-                <tbody>
-                    {% for record in open_records %}
-                    <tr>
-                        <td>
-                            <a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a>
-                        </td>
-                        <td>{{ record.quantity }}</td>
-                        <td>{% with loc=record.location|default:record.item.location %}{{ loc.name|default:"&mdash;" }}{% endwith %}</td>
-                        <td>{% if record.reported_by %}{{ record.reported_by_name|default:record.reported_by.username }}{% else %}&mdash;{% endif %}</td>
-                        <td>
-                            {% if record.expected_return %}
-                                {{ record.expected_return }}
-                            {% else %}
-                                &mdash;
-                            {% endif %}
-                        </td>
-                        <td>{{ record.reason|default:"&mdash;" }}</td>
-                        <td class="manage-notes-cell">
-                                <form method="post" action="{% url 'inventory:maintenance_complete' record.pk %}" class="manage-record-form" id="manage-form-{{ record.pk }}" data-live-submit>
-                                {% csrf_token %}
-                                <input type="text" name="notes" class="text-input text-input-sm" placeholder="Notes (optional)">
-                            </form>
-                        </td>
-                        <td class="actions-cell manage-actions-cell">
-                            <span class="actions-inner">
-                                <button type="submit" form="manage-form-{{ record.pk }}" formaction="{% url 'inventory:maintenance_complete' record.pk %}" class="button-link btn-sm manage-return" data-action="return">Return</button>
-                                <button type="submit" form="manage-form-{{ record.pk }}" formaction="{% url 'inventory:maintenance_write_off' record.pk %}" class="button-link danger btn-sm manage-writeoff" data-action="writeoff" data-item-name="{{ record.item.name }}">Could not be fixed</button>
-                            </span>
-                        </td>
-                    </tr>
-                {% empty %}
-                    <tr><td colspan="8">No items currently in maintenance.</td></tr>
+            <tbody>
+                {% for record in pending_approval %}
+                <tr>
+                    <td><a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a></td>
+                    <td>{{ record.quantity }}</td>
+                    <td>{{ record.location.name|default:record.item.location.name }}</td>
+                    <td>{{ record.reported_by_name|default:record.reported_by.username|default:"&mdash;" }}</td>
+                    <td>{{ record.expected_return|date:"d M Y"|default:"&mdash;" }}</td>
+                    <td>{{ record.reason|default:"&mdash;" }}</td>
+                    <td class="actions-cell">
+                        <form method="post" action="{% url 'inventory:maintenance_approve' record.pk %}" data-live-submit>
+                            {% csrf_token %}
+                            <button type="submit" class="button-link btn-sm">Approve</button>
+                        </form>
+                    </td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+    {% else %}
+    <p class="section-note">No items pending approval.</p>
+    {% endif %}
 
-    <h3>Recently returned / written off</h3>
+    <h3>Awaiting Collection</h3>
+    <p class="section-note">Approved items waiting for superadmin to collect and send for service.</p>
+    {% if awaiting_collection %}
     <div class="table-wrapper">
         <table>
             <thead>
-                <tr><th>Item</th><th>Qty</th><th>Location</th><th>Outcome</th><th>Closed</th><th>By</th><th>Notes</th></tr>
+                <tr><th>Item</th><th>Qty</th><th>Location</th><th>Reported by</th><th>Approved by</th><th>Expected back</th><th>Reason</th><th>Actions</th></tr>
             </thead>
-                <tbody>
-                    {% for record in completed_records %}
-                    <tr>
-                        <td>
-                            <a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a>
-                        </td>
-                        <td>{{ record.quantity }}</td>
-                        <td>{% with loc=record.location|default:record.item.location %}{{ loc.name|default:"&mdash;" }}{% endwith %}</td>
-                        <td>
-                            {% if record.outcome == "written_off" %}
-                                <span class="pill pill-danger">Could not be fixed</span>
-                            {% else %}
-                                <span class="pill pill-success">Returned</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ record.completed_at }}</td>
-                        <td>{% if record.completed_by %}{{ record.completed_by_name|default:record.completed_by.username }}{% else %}&mdash;{% endif %}</td>
-                        <td>{{ record.notes|default:"&mdash;" }}</td>
-                    </tr>
+            <tbody>
+                {% for record in awaiting_collection %}
+                <tr>
+                    <td><a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a></td>
+                    <td>{{ record.quantity }}</td>
+                    <td>{{ record.location.name|default:record.item.location.name }}</td>
+                    <td>{{ record.reported_by_name|default:record.reported_by.username|default:"&mdash;" }}</td>
+                    <td>{{ record.approved_by_name|default:record.approved_by.username|default:"&mdash;" }}</td>
+                    <td>{{ record.expected_return|date:"d M Y"|default:"&mdash;" }}</td>
+                    <td>{{ record.reason|default:"&mdash;" }}</td>
+                    <td class="actions-cell">
+                        <form method="post" action="{% url 'inventory:maintenance_collect' record.pk %}" data-live-submit>
+                            {% csrf_token %}
+                            <button type="submit" class="button-link btn-sm">Collect for Service</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="section-note">No items awaiting collection.</p>
+    {% endif %}
+
+    <h3>In Service</h3>
+    <p class="section-note">Items currently out for repair. <strong>Return</strong> puts units back into available stock once fixed; <strong>Could not be fixed</strong> writes units off (removed from total stock).</p>
+    {% if in_service %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr><th>Item</th><th>Qty</th><th>Location</th><th>Reported by</th><th>Collected by</th><th>Expected back</th><th>Reason</th><th>Notes</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+                {% for record in in_service %}
+                <tr>
+                    <td><a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a></td>
+                    <td>{{ record.quantity }}</td>
+                    <td>{{ record.location.name|default:record.item.location.name }}</td>
+                    <td>{{ record.reported_by_name|default:record.reported_by.username|default:"&mdash;" }}</td>
+                    <td>{{ record.collected_by_name|default:record.collected_by.username|default:"&mdash;" }}</td>
+                    <td>{{ record.expected_return|date:"d M Y"|default:"&mdash;" }}</td>
+                    <td>{{ record.reason|default:"&mdash;" }}</td>
+                    <td class="manage-notes-cell">
+                        <form method="post" action="{% url 'inventory:maintenance_complete' record.pk %}" class="manage-record-form" id="manage-form-{{ record.pk }}" data-live-submit>
+                            {% csrf_token %}
+                            <input type="text" name="notes" class="text-input text-input-sm" placeholder="Notes (optional)">
+                        </form>
+                    </td>
+                    <td class="actions-cell manage-actions-cell">
+                        <span class="actions-inner">
+                            <button type="submit" form="manage-form-{{ record.pk }}" formaction="{% url 'inventory:maintenance_complete' record.pk %}" class="button-link btn-sm manage-return" data-action="return">Return</button>
+                            <button type="submit" form="manage-form-{{ record.pk }}" formaction="{% url 'inventory:maintenance_write_off' record.pk %}" class="button-link danger btn-sm manage-writeoff" data-action="writeoff" data-item-name="{{ record.item.name }}">Could not be fixed</button>
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="section-note">No items currently in service.</p>
+    {% endif %}
+
+    <h3>Completed / Written Off</h3>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr><th>Item</th><th>Qty</th><th>Location</th><th>Outcome</th><th>Completed</th><th>By</th><th>Notes</th></tr>
+            </thead>
+            <tbody>
+                {% for record in completed_records %}
+                <tr>
+                    <td><a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a></td>
+                    <td>{{ record.quantity }}</td>
+                    <td>{{ record.location.name|default:record.item.location.name }}</td>
+                    <td>
+                        {% if record.status == "written_off" %}
+                            <span class="pill pill-danger">Could not be fixed</span>
+                        {% else %}
+                            <span class="pill pill-success">Returned</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ record.completed_at|date:"d M Y, H:i" }}</td>
+                    <td>{{ record.completed_by_name|default:record.completed_by.username|default:"&mdash;" }}</td>
+                    <td>{{ record.notes|default:"&mdash;" }}</td>
+                </tr>
                 {% empty %}
-                    <tr><td colspan="7">No items returned from maintenance yet.</td></tr>
+                <tr><td colspan="7">No completed maintenance records yet.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -123,14 +184,16 @@
                     <td><a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a></td>
                     <td>{{ record.quantity }}</td>
                     <td>
-                        {% if record.is_overdue %}
-                            <span class="pill pill-danger">Overdue</span>
-                        {% else %}
-                            <span class="pill pill-pending">In service</span>
-                        {% endif %}
+                        <span class="pill 
+                            {% if record.status == "pending_approval" %}pill-pending
+                            {% elif record.status == "approved_awaiting_collection" %}pill-warning
+                            {% elif record.status == "in_service" %}pill-info
+                            {% else %}pill-neutral{% endif %}">
+                            {{ record.get_status_display }}
+                        </span>
                     </td>
                     <td>{{ record.started_at|date:"d M Y" }}</td>
-                    <td>{% if record.expected_return %}{{ record.expected_return|date:"d M Y" }}{% else %}&mdash;{% endif %}</td>
+                    <td>{{ record.expected_return|date:"d M Y"|default:"&mdash;" }}</td>
                     <td class="actions-cell"><a class="button-link btn-sm" href="{% url 'inventory:maintenance_detail' record.pk %}">View</a></td>
                 </tr>
                 {% endfor %}
@@ -139,14 +202,14 @@
                     <td><a class="text-link" href="{% url 'inventory:item_detail' record.item.pk %}">{{ record.item.name }}</a></td>
                     <td>{{ record.quantity }}</td>
                     <td>
-                        {% if record.outcome == "written_off" %}
+                        {% if record.status == "written_off" %}
                             <span class="pill pill-danger">Could not be fixed</span>
                         {% else %}
                             <span class="pill pill-success">Returned</span>
                         {% endif %}
                     </td>
                     <td>{{ record.started_at|date:"d M Y" }}</td>
-                    <td>{% if record.expected_return %}{{ record.expected_return|date:"d M Y" }}{% else %}&mdash;{% endif %}</td>
+                    <td>{{ record.expected_return|date:"d M Y"|default:"&mdash;" }}</td>
                     <td class="actions-cell"><a class="button-link btn-sm" href="{% url 'inventory:maintenance_detail' record.pk %}">View</a></td>
                 </tr>
                 {% endfor %}
@@ -161,7 +224,7 @@
 
 <div class="card">
     <h3>Send an item to maintenance</h3>
-    <p class="section-note">Scan the QR code or pick the item, set how many units are going out for service, and add a note. This takes the units out of available stock until they're returned.</p>
+    <p class="section-note">Scan the QR code or pick the item, set how many units are going out for service, and add a note. This creates a maintenance request that requires superadmin approval before stock is moved.</p>
     <form method="post" action="{% url 'inventory:maintenance_start' %}" id="maintenance-form">
         {% csrf_token %}
 

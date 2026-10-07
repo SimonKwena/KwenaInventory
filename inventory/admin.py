@@ -141,8 +141,8 @@ class RequestAdmin(admin.ModelAdmin):
 
 @admin.register(Maintenance)
 class MaintenanceAdmin(admin.ModelAdmin):
-    list_display = ("item", "started_at", "expected_return", "completed_at", "reported_by_name", "reported_by", "completed_by_name", "completed_by")
-    list_filter = ("completed_at", "started_at")
+    list_display = ("item", "status", "started_at", "expected_return", "completed_at", "reported_by_name", "reported_by", "approved_by_name", "collected_by_name", "completed_by_name")
+    list_filter = ("status", "completed_at", "started_at")
     search_fields = ("item__catalog_item__name", "reason", "notes", "reported_by_name", "completed_by_name")
     autocomplete_fields = ("item",)
 

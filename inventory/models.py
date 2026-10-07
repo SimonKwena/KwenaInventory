@@ -688,9 +688,21 @@ class LiveVersion(models.Model):
 class Maintenance(models.Model):
     """A record of an item sent for repair / servicing.
 
-    An open record (no completed_at) means the item is currently out for
-    maintenance; completing it returns the item to available stock.
+    Status flow:
+    - pending_approval: Teacher/staff reported, waiting for superadmin approval
+    - approved: Superadmin approved, waiting for collection
+    - in_service: Superadmin collected, physically out for repair
+    - completed: Fixed and returned to available stock
+    - written_off: Could not be fixed, removed from inventory
     """
+
+    STATUS_CHOICES = [
+        ("pending_approval", "Pending Approval"),
+        ("approved", "Approved — Awaiting Collection"),
+        ("in_service", "In Service"),
+        ("completed", "Completed"),
+        ("written_off", "Written Off"),
+    ]
 
     item = models.ForeignKey("StockEntry", on_delete=models.CASCADE, related_name="maintenance_records")
     location = models.ForeignKey(
@@ -705,6 +717,10 @@ class Maintenance(models.Model):
         max_length=150, blank=True,
         help_text="Human-readable name of the person who reported the item.",
     )
+    status = models.CharField(
+        max_length=30, choices=STATUS_CHOICES, default="pending_approval",
+        help_text="Current state in the maintenance workflow.",
+    )
     started_at = models.DateTimeField(default=timezone.now)
     quantity = models.PositiveIntegerField(default=1)
     expected_return = models.DateTimeField(blank=True, null=True)
@@ -716,6 +732,16 @@ class Maintenance(models.Model):
         max_length=150, blank=True,
         help_text="Human-readable name of the person who returned the item.",
     )
+    approved_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, blank=True, null=True, related_name="maintenance_approved"
+    )
+    approved_by_name = models.CharField(max_length=150, blank=True)
+    approved_at = models.DateTimeField(blank=True, null=True)
+    collected_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, blank=True, null=True, related_name="maintenance_collected"
+    )
+    collected_by_name = models.CharField(max_length=150, blank=True)
+    collected_at = models.DateTimeField(blank=True, null=True)
     notes = models.TextField(blank=True)
     OUTCOME_CHOICES = [
         ("returned", "Returned / fixed"),
@@ -730,18 +756,26 @@ class Maintenance(models.Model):
         ordering = ["-started_at"]
 
     def __str__(self):
-        return f"Maintenance: {self.item.name}"
+        return f"Maintenance: {self.item.name} ({self.get_status_display()})"
 
     def save(self, *args, **kwargs):
         if not self.reported_by_name and self.reported_by_id:
             self.reported_by_name = display_name(self.reported_by)
         if not self.completed_by_name and self.completed_by_id:
             self.completed_by_name = display_name(self.completed_by)
+        if not self.approved_by_name and self.approved_by_id:
+            self.approved_by_name = display_name(self.approved_by)
+        if not self.collected_by_name and self.collected_by_id:
+            self.collected_by_name = display_name(self.collected_by)
         super().save(*args, **kwargs)
 
     @property
     def is_open(self):
-        return self.completed_at is None
+        return self.status in {"pending_approval", "approved", "in_service"}
+
+    @property
+    def is_in_service(self):
+        return self.status == "in_service"
 
 
 class StockTake(models.Model):

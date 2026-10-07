@@ -1026,14 +1026,11 @@ def get_user_request_history(user):
 
 
 @db_transaction.atomic
-def set_item_maintenance(item, *, user=None, reason="", expected_return=None, quantity=1, location=None):
-    """Move units of an item into maintenance and open a maintenance record."""
+def create_maintenance_request(item, *, user=None, reason="", expected_return=None, quantity=1, location=None):
+    """Create a maintenance request (pending approval). Stock is NOT moved yet."""
     item = StockEntry.objects.select_for_update().get(pk=item.pk)
     quantity = max(1, int(quantity))
     quantity = min(quantity, item.quantity_available)
-    item.quantity_maintenance = (item.quantity_maintenance or 0) + quantity
-    item.status = _resolve_status(item)
-    item.save(update_fields=["quantity_maintenance", "status"])
     return Maintenance.objects.create(
         item=item,
         location=location or item.location,
@@ -1041,50 +1038,83 @@ def set_item_maintenance(item, *, user=None, reason="", expected_return=None, qu
         reason=reason,
         reported_by=user,
         expected_return=_localize(expected_return),
+        status="pending_approval",
     )
 
 
 @db_transaction.atomic
-def complete_item_maintenance(record, *, user=None, notes=""):
+def approve_maintenance_request(record, *, user=None):
+    """Superadmin approves the maintenance request. Stock still available."""
+    record = Maintenance.objects.select_for_update().get(pk=record.pk)
+    if record.status != "pending_approval":
+        raise ValueError("Only pending approval requests can be approved.")
+    record.status = "approved_awaiting_collection"
+    record.approved_by = user
+    record.approved_by_name = display_name(user)
+    record.approved_at = timezone.now()
+    record.save(update_fields=["status", "approved_by", "approved_by_name", "approved_at"])
+    return record
+
+
+@db_transaction.atomic
+def collect_maintenance(record, *, user=None):
+    """Staff collects the item for service. Stock moves to maintenance."""
+    record = Maintenance.objects.select_for_update().get(pk=record.pk)
+    if record.status != "approved_awaiting_collection":
+        raise ValueError("Only approved requests can be collected.")
+    item = StockEntry.objects.select_for_update().get(pk=record.item.pk)
+    quantity = record.quantity
+    item.quantity_maintenance = (item.quantity_maintenance or 0) + quantity
+    item.status = _resolve_status(item)
+    item.save(update_fields=["quantity_maintenance", "status"])
+    record.status = "in_service"
+    record.collected_by = user
+    record.collected_by_name = display_name(user)
+    record.collected_at = timezone.now()
+    record.save(update_fields=["status", "collected_by", "collected_by_name", "collected_at"])
+    return record
+
+
+@db_transaction.atomic
+def complete_maintenance(record, *, user=None, notes=""):
     """Close a maintenance record and return its units to available stock."""
     record = Maintenance.objects.select_for_update().get(pk=record.pk)
+    if record.status != "in_service":
+        raise ValueError("Only in-service items can be completed.")
+    item = StockEntry.objects.select_for_update().get(pk=record.item.pk)
+    returned = min(record.quantity or 0, item.quantity_maintenance or 0)
+    item.quantity_maintenance = (item.quantity_maintenance or 0) - returned
+    item.status = _resolve_status(item)
+    item.save(update_fields=["quantity_maintenance", "status"])
+    record.status = "completed"
     record.completed_at = timezone.now()
     record.completed_by = user
     record.completed_by_name = display_name(user)
     record.outcome = "returned"
     if notes:
         record.notes = notes
-    record.save(update_fields=["completed_at", "completed_by", "completed_by_name", "outcome", "notes"])
-
-    item = StockEntry.objects.select_for_update().get(pk=record.item.pk)
-    returned = min(record.quantity or 0, item.quantity_maintenance or 0)
-    item.quantity_maintenance = (item.quantity_maintenance or 0) - returned
-    item.status = _resolve_status(item)
-    item.save(update_fields=["quantity_maintenance", "status"])
+    record.save(update_fields=["status", "completed_at", "completed_by", "completed_by_name", "outcome", "notes"])
     return record
 
 
 @db_transaction.atomic
 def write_off_maintenance(record, *, user=None, notes=""):
-    """Close a maintenance record whose item could not be fixed.
-
-    The units are removed from the system entirely (written off): they leave
-    both the maintenance count and the item's total stock, so available stock
-    is unaffected. Used when gear is broken beyond repair or lost in service.
-    """
+    """Close a maintenance record whose item could not be fixed."""
     record = Maintenance.objects.select_for_update().get(pk=record.pk)
-    record.completed_at = timezone.now()
-    record.completed_by = user
-    record.completed_by_name = display_name(user)
-    record.outcome = "written_off"
-    if notes:
-        record.notes = notes
-    record.save(update_fields=["completed_at", "completed_by", "completed_by_name", "outcome", "notes"])
-
+    if record.status != "in_service":
+        raise ValueError("Only in-service items can be written off.")
     item = StockEntry.objects.select_for_update().get(pk=record.item.pk)
     lost = min(record.quantity or 0, item.quantity_maintenance or 0)
     item.quantity_maintenance = (item.quantity_maintenance or 0) - lost
     item.quantity_total = max(0, (item.quantity_total or 0) - lost)
     item.status = _resolve_status(item)
     item.save(update_fields=["quantity_maintenance", "quantity_total", "status"])
+    record.status = "written_off"
+    record.completed_at = timezone.now()
+    record.completed_by = user
+    record.completed_by_name = display_name(user)
+    record.outcome = "written_off"
+    if notes:
+        record.notes = notes
+    record.save(update_fields=["status", "completed_at", "completed_by", "completed_by_name", "outcome", "notes"])
     return record

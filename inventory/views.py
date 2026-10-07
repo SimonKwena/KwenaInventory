@@ -56,7 +56,10 @@ from .models import (
 from .services import (
     _localize,
     apply_request,
-    complete_item_maintenance,
+    approve_maintenance_request,
+    collect_maintenance,
+    complete_maintenance,
+    create_maintenance_request,
     create_request,
     get_user_active_loans,
     get_user_borrowed_items,
@@ -66,7 +69,6 @@ from .services import (
     record_item_transaction,
     return_request_by_code,
     reject_request,
-    set_item_maintenance,
     void_request,
     void_transaction,
     write_off_maintenance,
@@ -2471,32 +2473,64 @@ def maintenance_list(request):
     records_qs = Maintenance.objects.all()
     if not is_staff:
         records_qs = records_qs.filter(reported_by=request.user)
-    open_records = (
-        records_qs.filter(completed_at__isnull=True)
-        .select_related("item", "item__catalog_item", "reported_by")
-        .order_by("started_at")
-    )
-    completed_records = (
-        records_qs.filter(completed_at__isnull=False)
-        .select_related("item", "item__catalog_item", "completed_by")
-        .order_by("-completed_at")[:20]
-    )
+
+    # Staff view splits by status
+    if is_staff:
+        pending_approval = (
+            records_qs.filter(status="pending_approval")
+            .select_related("item", "item__catalog_item", "reported_by", "location")
+            .order_by("started_at")
+        )
+        awaiting_collection = (
+            records_qs.filter(status="approved_awaiting_collection")
+            .select_related("item", "item__catalog_item", "reported_by", "approved_by", "location")
+            .order_by("approved_at")
+        )
+        in_service = (
+            records_qs.filter(status="in_service")
+            .select_related("item", "item__catalog_item", "reported_by", "collected_by", "location")
+            .order_by("collected_at")
+        )
+        completed_records = (
+            records_qs.filter(status__in=["completed", "written_off"])
+            .select_related("item", "item__catalog_item", "completed_by", "location")
+            .order_by("-completed_at")[:20]
+        )
+        open_records = records_qs.filter(status__in=["pending_approval", "approved_awaiting_collection", "in_service"])
+    else:
+        # Teacher view - same as before but using status
+        open_records = (
+            records_qs.filter(status__in=["pending_approval", "approved_awaiting_collection", "in_service"])
+            .select_related("item", "item__catalog_item", "reported_by")
+            .order_by("started_at")
+        )
+        completed_records = (
+            records_qs.filter(status__in=["completed", "written_off"])
+            .select_related("item", "item__catalog_item", "completed_by")
+            .order_by("-completed_at")[:20]
+        )
+        pending_approval = awaiting_collection = in_service = Maintenance.objects.none()
+
     now = timezone.now()
     for record in open_records:
         record.is_overdue = bool(record.expected_return and record.expected_return < now)
+    for record in completed_records:
+        record.is_overdue = bool(record.expected_return and record.expected_return < now)
+
+    # Stats for dashboard
+    stats = {
+        "pending_approval": pending_approval.count(),
+        "awaiting_collection": awaiting_collection.count(),
+        "in_service": in_service.count(),
+        "completed": completed_records.count(),
+    }
+
     form = MaintenanceForm(request.GET or None, user=request.user)
     if request.GET.get("item"):
         try:
             form.fields["item"].initial = int(request.GET["item"])
         except (ValueError, TypeError):
             pass
-    maintenance_items = (
-        StockEntry.objects.filter(maintenance_records__completed_at__isnull=True)
-        .filter(quantity_maintenance__gt=0)
-        .select_related("catalog_item", "location", "condition", "status")
-        .distinct()
-        .order_by("catalog_item__category", "catalog_item__subcategory", "catalog_item__name")
-    )
     form_items = (
         StockEntry.objects.filter(is_active=True)
         .select_related("catalog_item", "location")
@@ -2508,10 +2542,13 @@ def maintenance_list(request):
         {
             "open_records": open_records,
             "completed_records": completed_records,
+            "pending_approval": pending_approval,
+            "awaiting_collection": awaiting_collection,
+            "in_service": in_service,
             "form": form,
             "is_staff": is_staff,
             "total_in_maintenance": open_records.count(),
-            "maintenance_items": maintenance_items,
+            "stats": stats,
             "items": form_items,
         },
     )
@@ -2549,7 +2586,7 @@ def maintenance_start(request):
         return redirect("inventory:maintenance")
     item = form.cleaned_data["item"]
     quantity = form.cleaned_data.get("quantity") or 1
-    record = set_item_maintenance(
+    record = create_maintenance_request(
         item,
         user=request.user,
         reason=form.cleaned_data.get("reason", ""),
@@ -2558,15 +2595,33 @@ def maintenance_start(request):
         location=form.cleaned_data.get("location"),
     )
     applied_quantity = record.quantity
-    messages.success(request, f"{applied_quantity} x {item.name} moved to maintenance.")
+    messages.success(request, f"{applied_quantity} x {item.name} sent for maintenance approval.")
+    return redirect("inventory:maintenance")
+
+
+@require_POST
+@user_passes_test(lambda user: user.is_superuser)
+def maintenance_approve(request, pk):
+    record = get_object_or_404(Maintenance, pk=pk, status="pending_approval")
+    approve_maintenance_request(record, user=request.user)
+    messages.success(request, f"{record.item.name} maintenance approved — awaiting collection.")
+    return redirect("inventory:maintenance")
+
+
+@require_POST
+@user_passes_test(lambda user: user.is_staff)
+def maintenance_collect(request, pk):
+    record = get_object_or_404(Maintenance, pk=pk, status="approved_awaiting_collection")
+    collect_maintenance(record, user=request.user)
+    messages.success(request, f"{record.item.name} collected for service.")
     return redirect("inventory:maintenance")
 
 
 @require_POST
 @user_passes_test(lambda user: user.is_staff)
 def maintenance_complete(request, pk):
-    record = get_object_or_404(Maintenance, pk=pk, completed_at__isnull=True)
-    complete_item_maintenance(record, user=request.user, notes=request.POST.get("notes", ""))
+    record = get_object_or_404(Maintenance, pk=pk, status="in_service")
+    complete_maintenance(record, user=request.user, notes=request.POST.get("notes", ""))
     messages.success(request, f"{record.item.name} returned from maintenance.")
     return redirect("inventory:maintenance")
 
@@ -2574,7 +2629,7 @@ def maintenance_complete(request, pk):
 @require_POST
 @user_passes_test(lambda user: user.is_staff)
 def maintenance_write_off(request, pk):
-    record = get_object_or_404(Maintenance, pk=pk, completed_at__isnull=True)
+    record = get_object_or_404(Maintenance, pk=pk, status="in_service")
     write_off_maintenance(record, user=request.user, notes=request.POST.get("notes", ""))
     messages.success(request, f"{record.item.name} written off (could not be fixed).")
     return redirect("inventory:maintenance")
