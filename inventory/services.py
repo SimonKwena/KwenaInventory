@@ -1048,7 +1048,7 @@ def approve_maintenance_request(record, *, user=None):
     record = Maintenance.objects.select_for_update().get(pk=record.pk)
     if record.status != "pending_approval":
         raise ValueError("Only pending approval requests can be approved.")
-    record.status = "approved_awaiting_collection"
+    record.status = "approved"
     record.approved_by = user
     record.approved_by_name = display_name(user)
     record.approved_at = timezone.now()
