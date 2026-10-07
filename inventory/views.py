@@ -2482,7 +2482,7 @@ def maintenance_list(request):
             .order_by("started_at")
         )
         awaiting_collection = (
-            records_qs.filter(status="approved_awaiting_collection")
+            records_qs.filter(status="approved")
             .select_related("item", "item__catalog_item", "reported_by", "approved_by", "location")
             .order_by("approved_at")
         )
@@ -2496,11 +2496,11 @@ def maintenance_list(request):
             .select_related("item", "item__catalog_item", "completed_by", "location")
             .order_by("-completed_at")[:20]
         )
-        open_records = records_qs.filter(status__in=["pending_approval", "approved_awaiting_collection", "in_service"])
+        open_records = records_qs.filter(status__in=["pending_approval", "approved", "in_service"])
     else:
         # Teacher view - same as before but using status
         open_records = (
-            records_qs.filter(status__in=["pending_approval", "approved_awaiting_collection", "in_service"])
+            records_qs.filter(status__in=["pending_approval", "approved", "in_service"])
             .select_related("item", "item__catalog_item", "reported_by")
             .order_by("started_at")
         )
