@@ -29,8 +29,9 @@
 
 {% if is_staff %}
 <div class="card" id="manage-maintenance-items" data-region="manage-maintenance">
+    {% if request.user.is_superuser %}
     <h3>Pending Approval</h3>
-    <p class="section-note">Items reported by teachers waiting for superadmin approval.</p>
+    <p class="section-note">Items reported by teachers waiting for approval.</p>
     {% if pending_approval %}
     <div class="table-wrapper">
         <table>
@@ -62,7 +63,7 @@
     {% endif %}
 
     <h3>Awaiting Collection</h3>
-    <p class="section-note">Approved items waiting for superadmin to collect and send for service.</p>
+    <p class="section-note">Approved items waiting for collection.</p>
     {% if awaiting_collection %}
     <div class="table-wrapper">
         <table>
@@ -93,14 +94,15 @@
     {% else %}
     <p class="section-note">No items awaiting collection.</p>
     {% endif %}
+    {% endif %}
 
     <h3>In Service</h3>
-    <p class="section-note">Items currently out for repair. <strong>Return</strong> puts units back into available stock once fixed; <strong>Could not be fixed</strong> writes units off (removed from total stock).</p>
+    <p class="section-note">Items currently out for repair. {% if request.user.is_superuser %}<strong>Return</strong> puts units back into available stock once fixed; <strong>Could not be fixed</strong> writes units off (removed from total stock).{% endif %}</p>
     {% if in_service %}
     <div class="table-wrapper">
         <table>
             <thead>
-                <tr><th>Item</th><th>Qty</th><th>Location</th><th>Reported by</th><th>Collected by</th><th>Expected back</th><th>Reason</th><th>Notes</th><th>Actions</th></tr>
+                <tr><th>Item</th><th>Qty</th><th>Location</th><th>Reported by</th><th>Collected by</th><th>Expected back</th><th>Reason</th>{% if request.user.is_superuser %}<th>Notes</th><th>Actions</th>{% endif %}</tr>
             </thead>
             <tbody>
                 {% for record in in_service %}
@@ -112,6 +114,7 @@
                     <td>{{ record.collected_by_name|default:record.collected_by.username|default:"&mdash;" }}</td>
                     <td>{{ record.expected_return|date:"d M Y"|default:"&mdash;" }}</td>
                     <td>{{ record.reason|default:"&mdash;" }}</td>
+                    {% if request.user.is_superuser %}
                     <td class="manage-notes-cell">
                         <form method="post" action="{% url 'inventory:maintenance_complete' record.pk %}" class="manage-record-form" id="manage-form-{{ record.pk }}" data-live-submit>
                             {% csrf_token %}
@@ -124,6 +127,7 @@
                             <button type="submit" form="manage-form-{{ record.pk }}" formaction="{% url 'inventory:maintenance_write_off' record.pk %}" class="button-link danger btn-sm manage-writeoff" data-action="writeoff" data-item-name="{{ record.item.name }}">Could not be fixed</button>
                         </span>
                     </td>
+                    {% endif %}
                 </tr>
                 {% endfor %}
             </tbody>

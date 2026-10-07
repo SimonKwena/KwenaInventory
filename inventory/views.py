@@ -2609,16 +2609,16 @@ def maintenance_approve(request, pk):
 
 
 @require_POST
-@user_passes_test(lambda user: user.is_staff)
+@user_passes_test(lambda user: user.is_superuser)
 def maintenance_collect(request, pk):
-    record = get_object_or_404(Maintenance, pk=pk, status="approved_awaiting_collection")
+    record = get_object_or_404(Maintenance, pk=pk, status="approved")
     collect_maintenance(record, user=request.user)
     messages.success(request, f"{record.item.name} collected for service.")
     return redirect("inventory:maintenance")
 
 
 @require_POST
-@user_passes_test(lambda user: user.is_staff)
+@user_passes_test(lambda user: user.is_superuser)
 def maintenance_complete(request, pk):
     record = get_object_or_404(Maintenance, pk=pk, status="in_service")
     complete_maintenance(record, user=request.user, notes=request.POST.get("notes", ""))
@@ -2627,7 +2627,7 @@ def maintenance_complete(request, pk):
 
 
 @require_POST
-@user_passes_test(lambda user: user.is_staff)
+@user_passes_test(lambda user: user.is_superuser)
 def maintenance_write_off(request, pk):
     record = get_object_or_404(Maintenance, pk=pk, status="in_service")
     write_off_maintenance(record, user=request.user, notes=request.POST.get("notes", ""))
