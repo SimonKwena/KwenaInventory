@@ -2178,6 +2178,10 @@ function gearroomInit() {
                     maintenanceItem.selectedIndex = 0;
                 }
             }
+            maintenanceItem.disabled = !locId;
+            if (!locId) {
+                maintenanceItem.selectedIndex = 0;
+            }
         }
         maintenanceLocation.addEventListener('change', filterMaintenanceItems);
         filterMaintenanceItems();
