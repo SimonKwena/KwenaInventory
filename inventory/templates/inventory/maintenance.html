@@ -193,7 +193,7 @@
                             {% elif record.status == "approved" %}pill-warning
                             {% elif record.status == "in_service" %}pill-info
                             {% else %}pill-neutral{% endif %}">
-                            {{ record.get_status_display }}
+                            {% if record.status == "approved" %}Approved — Awaiting Collection{% else %}{{ record.get_status_display }}{% endif %}
                         </span>
                     </td>
                     <td>{{ record.started_at|date:"d M Y" }}</td>
