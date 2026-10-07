@@ -1058,9 +1058,9 @@ def approve_maintenance_request(record, *, user=None):
 
 @db_transaction.atomic
 def collect_maintenance(record, *, user=None):
-    """Staff collects the item for service. Stock moves to maintenance."""
+    """Superadmin collects the item for service. Stock moves to maintenance."""
     record = Maintenance.objects.select_for_update().get(pk=record.pk)
-    if record.status != "approved_awaiting_collection":
+    if record.status != "approved":
         raise ValueError("Only approved requests can be collected.")
     item = StockEntry.objects.select_for_update().get(pk=record.item.pk)
     quantity = record.quantity
