@@ -1,11 +1,13 @@
 {% if request.user.is_authenticated %}
     <div class="card home-hero">
             <div class="home-hero-copy">
-                <h2>Welcome back, {{ request.user.guest_profile.full_name|default:request.user.get_full_name|default:request.user.username }}</h2>
+                <div class="home-hero-header">
+                    <h2>Welcome back, {{ request.user.guest_profile.full_name|default:request.user.get_full_name|default:request.user.username }}</h2>
+                    {% if is_teacher %}
+                    <a class="button-link btn-sm" href="{% url 'inventory:teacher_room' %}">My Room</a>
+                    {% endif %}
+                </div>
                 <p class="section-note">Move stock with the quick action, or browse available gear above.</p>
-                {% if is_teacher %}
-                <a class="button-link" href="{% url 'inventory:teacher_room' %}" style="margin-top: 0.5rem;">My Room</a>
-                {% endif %}
             </div>
             <div class="card-light borrowed-panel" data-region="home-info">
                 <h3>Info &amp; updates</h3>

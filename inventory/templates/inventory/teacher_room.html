@@ -51,12 +51,7 @@
                     </td>
                     {% if can_send_maintenance %}
                     <td>
-                        <form method="post" action="{% url 'inventory:maintenance_start' %}" class="maintenance-form" data-item-id="{{ item.pk }}">
-                            {% csrf_token %}
-                            <input type="hidden" name="item" value="{{ item.pk }}">
-                            <input type="hidden" name="location" value="{{ item.location.pk }}">
-                            <button type="submit" class="button-link btn-sm" data-confirm="Move this item to maintenance?">Maintenance</button>
-                        </form>
+                        <button type="button" class="button-link btn-sm" data-maintenance-toggle data-item-id="{{ item.pk }}" data-item-name="{{ item.catalog_item.name|escapejs }}" data-available="{{ item.quantity_available }}">Maintenance</button>
                     </td>
                     {% endif %}
                 </tr>
@@ -74,4 +69,71 @@
     <p class="section-note">This room has no active items.</p>
     {% endif %}
 </div>
+
+<!-- Maintenance Modal -->
+<div class="modal-overlay" id="maintenance-modal" role="dialog" aria-modal="true" aria-labelledby="maintenance-modal-title">
+    <div class="modal-card">
+        <button type="button" class="modal-close" data-close-modal="maintenance-modal" aria-label="Close">&times;</button>
+        <h2 id="maintenance-modal-title">Send to Maintenance</h2>
+        <p class="section-note" id="maintenance-modal-item"></p>
+        <form method="post" action="{% url 'inventory:maintenance_start' %}" id="maintenance-form">
+            {% csrf_token %}
+            <input type="hidden" name="item" id="maintenance-item-id">
+            <input type="hidden" name="location" id="maintenance-location-id">
+            
+            <div class="form-row">
+                <div>
+                    <label class="label" for="maintenance-quantity">Quantity <span class="required-star">*</span></label>
+                    <input type="number" name="quantity" id="maintenance-quantity" class="text-input" min="1" value="1" required>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div>
+                    <label class="label" for="maintenance-reason">Issue / reason <span class="required-star">*</span></label>
+                    <textarea name="reason" id="maintenance-reason" class="text-input" rows="2" required></textarea>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div>
+                    <label class="label" for="maintenance-expected-return">Expected back</label>
+                    <input type="date" name="expected_return" id="maintenance-expected-return" class="text-input">
+                </div>
+            </div>
+            
+            <div class="actions">
+                <button type="submit" class="button-link">Send to maintenance</button>
+                <button type="button" class="button-link secondary" data-close-modal="maintenance-modal">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const modal = document.getElementById('maintenance-modal');
+    if (!modal) return;
+
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('[data-maintenance-toggle]');
+        if (btn) {
+            const itemId = btn.dataset.itemId;
+            const itemName = btn.dataset.itemName;
+            const available = btn.dataset.available;
+            document.getElementById('maintenance-item-id').value = itemId;
+            // location will be the teacher's assigned room - we need to pass it
+            document.getElementById('maintenance-location-id').value = '{{ assigned_location.pk }}';
+            document.getElementById('maintenance-quantity').max = available;
+            document.getElementById('maintenance-quantity').value = 1;
+            document.getElementById('maintenance-reason').value = '';
+            document.getElementById('maintenance-expected-return').value = '';
+            document.getElementById('maintenance-modal-item').textContent = itemName + ' (Available: ' + available + ')';
+            modal.classList.add('is-open');
+        }
+    });
+})();
+</script>
 {% endblock %}
