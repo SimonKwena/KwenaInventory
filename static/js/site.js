@@ -2191,6 +2191,35 @@ function gearroomInit() {
         });
     }
 
+    const maintenanceLocation = document.querySelector('#maintenance-form select[name="location"]');
+    const maintenanceItem = document.querySelector('#maintenance-form select[name="item"]');
+    if (maintenanceLocation && maintenanceItem) {
+        function filterMaintenanceItems() {
+            const locId = maintenanceLocation.value;
+            const currentItemId = maintenanceItem.value;
+            Array.prototype.slice.call(maintenanceItem.options).forEach(function (opt) {
+                if (!opt.value) {
+                    opt.style.display = '';
+                    return;
+                }
+                const match = !locId || opt.getAttribute('data-location-id') === locId;
+                opt.style.display = match ? '' : 'none';
+            });
+            if (currentItemId) {
+                const currentOpt = maintenanceItem.querySelector('option[value="' + currentItemId + '"]');
+                if (currentOpt && currentOpt.style.display === 'none') {
+                    maintenanceItem.selectedIndex = 0;
+                }
+            }
+            maintenanceItem.disabled = !locId;
+            if (!locId) {
+                maintenanceItem.selectedIndex = 0;
+            }
+        }
+        maintenanceLocation.addEventListener('change', filterMaintenanceItems);
+        filterMaintenanceItems();
+    }
+
     const toggleManageItems = document.querySelector('#toggle-manage-items');
     const manageItemsPanel = document.querySelector('#manage-maintenance-items');
     if (toggleManageItems && manageItemsPanel) {

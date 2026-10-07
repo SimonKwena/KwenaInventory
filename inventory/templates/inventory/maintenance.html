@@ -188,14 +188,24 @@
 
         <div class="form-row form-row-half">
             <div>
-                <label class="label" for="id_item">Item <span class="required-star">*</span></label>
-                {{ form.item }}
-                {% if form.item.errors %}<ul class="errorlist">{% for error in form.item.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
-                {% if form.asset_tag.errors %}<ul class="errorlist">{% for error in form.asset_tag.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+                <label class="label" for="id_location">Location <span class="required-star">*</span></label>
+                <select name="location" id="id_location" class="qa-location-select" required>
+                    <option value="">Choose a location</option>
+                    {% for location in form.fields.location.queryset %}
+                        <option value="{{ location.id }}">{{ location.name }}</option>
+                    {% endfor %}
+                </select>
             </div>
             <div>
-                <label class="label" for="id_location">Location (where it is for service)</label>
-                {{ form.location }}
+                <label class="label" for="id_item">Item <span class="required-star">*</span></label>
+                <select name="item" id="id_item" class="qa-item-select" required disabled>
+                    <option value="">Choose an item</option>
+                    {% for item in items %}
+                        <option value="{{ item.id }}" data-location-id="{{ item.location.id|default:'' }}">{{ item.name }} &middot; {{ item.quantity_available }} available</option>
+                    {% endfor %}
+                </select>
+                {% if form.item.errors %}<ul class="errorlist">{% for error in form.item.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+                {% if form.asset_tag.errors %}<ul class="errorlist">{% for error in form.asset_tag.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
             </div>
             <div>
                 <label class="label" for="id_quantity">Quantity <span class="required-star">*</span></label>

@@ -477,7 +477,7 @@ class MaintenanceForm(forms.Form):
     )
     location = forms.ModelChoiceField(
         queryset=Location.objects.filter(is_active=True).order_by("name"),
-        required=False,
+        required=True,
         label="Location (where it is for service)",
     )
     quantity = forms.IntegerField(min_value=1, initial=1, label="Quantity", required=True)

@@ -2455,6 +2455,11 @@ def maintenance_list(request):
         .distinct()
         .order_by("catalog_item__category", "catalog_item__subcategory", "catalog_item__name")
     )
+    form_items = (
+        StockEntry.objects.filter(is_active=True)
+        .select_related("catalog_item", "location")
+        .order_by("catalog_item__name")
+    )
     return render(
         request,
         "inventory/maintenance.html",
@@ -2465,6 +2470,7 @@ def maintenance_list(request):
             "is_staff": is_staff,
             "total_in_maintenance": open_records.count(),
             "maintenance_items": maintenance_items,
+            "items": form_items,
         },
     )
 
