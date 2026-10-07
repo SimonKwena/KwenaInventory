@@ -72,41 +72,50 @@
 
 <!-- Maintenance Modal -->
 <div class="modal-overlay" id="maintenance-modal" role="dialog" aria-modal="true" aria-labelledby="maintenance-modal-title">
-    <div class="modal-card">
+    <div class="modal-card slip-modal-card">
         <button type="button" class="modal-close" data-close-modal="maintenance-modal" aria-label="Close">&times;</button>
-        <h2 id="maintenance-modal-title">Send to Maintenance</h2>
-        <p class="section-note" id="maintenance-modal-item"></p>
-        <form method="post" action="{% url 'inventory:maintenance_start' %}" id="maintenance-form">
-            {% csrf_token %}
-            <input type="hidden" name="item" id="maintenance-item-id">
-            <input type="hidden" name="location" id="maintenance-location-id">
-            
-            <div class="form-row">
-                <div>
-                    <label class="label" for="maintenance-quantity">Quantity <span class="required-star">*</span></label>
-                    <input type="number" name="quantity" id="maintenance-quantity" class="text-input" min="1" value="1" required>
+
+        <div class="slip-modal-scroll">
+            <div class="slip-modal-head">
+                <span class="slip-modal-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 2 2 7l10 5 10-5-10-5Zm0 7.2L4.6 6 12 2.8 19.4 6 12 9.2ZM4 9.5V17c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-7.5l-8 4-8-4Z"/></svg>
+                </span>
+                <h2 id="maintenance-modal-title">Send to Maintenance</h2>
+                <span class="pill pill-warning">Item will be unavailable</span>
+                <p class="section-note" id="maintenance-modal-item"></p>
+            </div>
+
+            <form method="post" action="{% url 'inventory:maintenance_start' %}" id="maintenance-form">
+                {% csrf_token %}
+                <input type="hidden" name="item" id="maintenance-item-id">
+                <input type="hidden" name="location" id="maintenance-location-id">
+
+                <div class="slip-modal-body">
+                    <div class="form-row form-row-half">
+                        <div>
+                            <label class="label" for="maintenance-quantity">Quantity <span class="required-star">*</span></label>
+                            <input type="number" name="quantity" id="maintenance-quantity" class="text-input" min="1" value="1" required>
+                        </div>
+                        <div>
+                            <label class="label" for="maintenance-expected-return">Expected back</label>
+                            <input type="date" name="expected_return" id="maintenance-expected-return" class="text-input">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div>
+                            <label class="label" for="maintenance-reason">Issue / reason <span class="required-star">*</span></label>
+                            <textarea name="reason" id="maintenance-reason" class="text-input" rows="3" required placeholder="Describe the issue..."></textarea>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            
-            <div class="form-row">
-                <div>
-                    <label class="label" for="maintenance-reason">Issue / reason <span class="required-star">*</span></label>
-                    <textarea name="reason" id="maintenance-reason" class="text-input" rows="2" required></textarea>
+
+                <div class="slip-modal-foot">
+                    <button type="submit" class="button-link">Send to maintenance</button>
+                    <button type="button" class="button-link secondary" data-close-modal="maintenance-modal">Cancel</button>
                 </div>
-            </div>
-            
-            <div class="form-row">
-                <div>
-                    <label class="label" for="maintenance-expected-return">Expected back</label>
-                    <input type="date" name="expected_return" id="maintenance-expected-return" class="text-input">
-                </div>
-            </div>
-            
-            <div class="actions">
-                <button type="submit" class="button-link">Send to maintenance</button>
-                <button type="button" class="button-link secondary" data-close-modal="maintenance-modal">Cancel</button>
-            </div>
-        </form>
+            </form>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -124,7 +133,6 @@
             const itemName = btn.dataset.itemName;
             const available = btn.dataset.available;
             document.getElementById('maintenance-item-id').value = itemId;
-            // location will be the teacher's assigned room - we need to pass it
             document.getElementById('maintenance-location-id').value = '{{ assigned_location.pk }}';
             document.getElementById('maintenance-quantity').max = available;
             document.getElementById('maintenance-quantity').value = 1;
