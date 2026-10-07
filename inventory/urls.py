@@ -43,6 +43,7 @@ urlpatterns = [
     path("landing/", views.landing, name="landing"),
     path("staff/", views.staff_home, name="staff_home"),
     path("teacher/", views.teacher_home, name="teacher_home"),
+    path("teacher/room/", views.teacher_room, name="teacher_room"),
     path("catalog/", views.catalog, name="catalog"),
     path("item-lookup/", views.item_lookup, name="item_lookup"),
     path("cart/add/", views.cart_add, name="cart_add"),

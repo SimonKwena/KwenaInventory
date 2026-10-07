@@ -491,6 +491,48 @@ def teacher_home(request):
     )
 
 
+@login_required
+def teacher_room(request):
+    """View the gear in the teacher's assigned room."""
+    if role_of(request.user) != ROLE_TEACHER:
+        return redirect("inventory:home")
+
+    profile = getattr(request.user, "user_profile", None)
+    assigned_location = getattr(profile, "assigned_location", None)
+
+    if not assigned_location:
+        return render(
+            request,
+            "inventory/teacher_room.html",
+            {
+                "assigned_location": None,
+                "items": [],
+                "can_send_maintenance": True,
+            },
+        )
+
+    item_qs = (
+        StockEntry.objects.filter(is_active=True, location=assigned_location)
+        .select_related("catalog_item", "location", "status", "condition")
+        .order_by("catalog_item__category", "catalog_item__subcategory", "catalog_item__name")
+    )
+    items = list(item_qs)
+    for item in items:
+        desc = (item.catalog_item.description or "").strip()
+        item.type_label = desc if not desc.startswith("Imported from") else ""
+        item.group_label = (item.catalog_item.category or "").strip() or (item.type_label or "Items")
+
+    return render(
+        request,
+        "inventory/teacher_room.html",
+        {
+            "assigned_location": assigned_location,
+            "items": items,
+            "can_send_maintenance": True,
+        },
+    )
+
+
 @user_passes_test(lambda user: user.is_staff)
 def staff_home(request):
     """Staff desk.

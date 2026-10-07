@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+
+{% block title %}My Room | Kwena Gear Room{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>My Room: {% if assigned_location %}{{ assigned_location.name }}{% else %}Not assigned{% endif %}</h2>
+        {% if not assigned_location %}
+            <p class="section-note">You don't have a room assigned yet. Ask an admin to assign you a room.</p>
+        {% endif %}
+    </div>
+    
+    {% if assigned_location and items %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Category</th>
+                    <th>Total</th>
+                    <th>Available</th>
+                    <th>Out</th>
+                    <th>Condition</th>
+                    <th>Status</th>
+                    {% if can_send_maintenance %}<th>Actions</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>
+                        <strong>{{ item.catalog_item.name }}</strong>
+                        {% if item.catalog_item.sku %}
+                            <br><span class="section-note">SKU: {{ item.catalog_item.sku }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.catalog_item.category }}{% if item.catalog_item.subcategory %} &middot; {{ item.catalog_item.subcategory }}{% endif %}</td>
+                    <td>{{ item.quantity_total }}</td>
+                    <td>{{ item.quantity_available }}</td>
+                    <td>{{ item.quantity_out }}</td>
+                    <td>{{ item.condition|default:"—" }}</td>
+                    <td>
+                        {% if item.status %}
+                            <span class="pill {% if item.status.name == 'Out' %}pill-danger{% elif item.status.name == 'Available' %}pill-success{% elif item.status.name == 'Maintenance' %}pill-warning{% else %}pill-neutral{% endif %}">
+                                {{ item.status.name }}
+                            </span>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    {% if can_send_maintenance %}
+                    <td>
+                        <form method="post" action="{% url 'inventory:maintenance_start' %}" class="maintenance-form" data-item-id="{{ item.pk }}">
+                            {% csrf_token %}
+                            <input type="hidden" name="item" value="{{ item.pk }}">
+                            <input type="hidden" name="location" value="{{ item.location.pk }}">
+                            <button type="submit" class="button-link btn-sm" data-confirm="Move this item to maintenance?">Maintenance</button>
+                        </form>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if can_send_maintenance %}8{% else %}7{% endif %}" class="text-center">
+                        No items in this room.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% elif assigned_location %}
+    <p class="section-note">This room has no active items.</p>
+    {% endif %}
+</div>
+{% endblock %}

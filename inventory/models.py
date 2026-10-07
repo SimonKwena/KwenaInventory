@@ -304,6 +304,14 @@ class UserProfile(models.Model):
         default=False,
         help_text="Whether the user has dismissed the first-login onboarding popup.",
     )
+    assigned_location = models.ForeignKey(
+        "Location",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_teachers",
+        help_text="The room/location assigned to this teacher.",
+    )
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:

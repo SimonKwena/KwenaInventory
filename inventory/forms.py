@@ -408,6 +408,12 @@ class UserAdminForm(forms.ModelForm):
             "and guest are members only."
         ),
     )
+    assigned_location = forms.ModelChoiceField(
+        queryset=Location.objects.filter(is_active=True).order_by("name"),
+        required=False,
+        label="Assigned room",
+        help_text="Room/location assigned to this teacher (only used for teachers).",
+    )
 
     class Meta:
         model = User
@@ -426,6 +432,8 @@ class UserAdminForm(forms.ModelForm):
                 self.fields["role"].initial = "superadmin"
             elif self.instance.is_staff:
                 self.fields["role"].initial = "staff"
+            if profile and profile.assigned_location:
+                self.fields["assigned_location"].initial = profile.assigned_location
 
     def clean(self):
         cleaned = super().clean()
@@ -448,6 +456,11 @@ class UserAdminForm(forms.ModelForm):
             # set_user_role persists the user, syncs is_staff/is_superuser from
             # the chosen role, and saves the UserProfile role.
             user = set_user_role(user, self.cleaned_data.get("role", "student"))
+            # Also save the assigned_location if provided
+            profile = getattr(user, "user_profile", None)
+            if profile:
+                profile.assigned_location = self.cleaned_data.get("assigned_location")
+                profile.save(update_fields=["assigned_location"])
         return user
 
 
