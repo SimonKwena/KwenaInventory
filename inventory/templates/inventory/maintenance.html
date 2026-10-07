@@ -190,7 +190,7 @@
                     <td>
                         <span class="pill 
                             {% if record.status == "pending_approval" %}pill-pending
-                            {% elif record.status == "approved_awaiting_collection" %}pill-warning
+                            {% elif record.status == "approved" %}pill-warning
                             {% elif record.status == "in_service" %}pill-info
                             {% else %}pill-neutral{% endif %}">
                             {{ record.get_status_display }}
