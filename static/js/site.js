@@ -2108,26 +2108,6 @@ function gearroomInit() {
                         }
                     });
                 }
-                if (inputField && inputField.id === 'maintenance-scan-asset') {
-                    const itemSelect = document.querySelector('#id_item');
-                    const locSelect = document.querySelector('#id_location');
-                    if (itemSelect) {
-                        const match = Array.prototype.slice.call(itemSelect.options)
-                            .some(function (opt) { return opt.value === String(itemId); });
-                        if (match) {
-                            itemSelect.value = String(itemId);
-                            itemSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-                    }
-                    if (locSelect && locationId) {
-                        const match = Array.prototype.slice.call(locSelect.options)
-                            .some(function (opt) { return opt.value === String(locationId); });
-                        if (match) {
-                            locSelect.value = String(locationId);
-                            locSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-                    }
-                }
             }
             inputField.dispatchEvent(new Event('input', { bubbles: true }));
             stopCamera();
@@ -2167,26 +2147,13 @@ function gearroomInit() {
 
     const maintenanceForm = document.querySelector('#maintenance-form');
     const clearMaintenanceForm = document.querySelector('#clear-maintenance-form');
-    const clearMaintenanceAsset = document.querySelector('#clear-maintenance-asset');
 
     if (clearMaintenanceForm && maintenanceForm) {
         clearMaintenanceForm.addEventListener('click', function () {
             maintenanceForm.reset();
-            if (clearMaintenanceAsset) {
-                clearMaintenanceAsset.click();
-            }
             const panel = document.querySelector('#maintenance-camera-panel');
             if (panel) {
                 panel.style.display = 'none';
-            }
-        });
-    }
-
-    if (clearMaintenanceAsset) {
-        clearMaintenanceAsset.addEventListener('click', function () {
-            const input = document.querySelector('#maintenance-scan-asset');
-            if (input) {
-                input.value = '';
             }
         });
     }
@@ -2210,10 +2177,6 @@ function gearroomInit() {
                 if (currentOpt && currentOpt.style.display === 'none') {
                     maintenanceItem.selectedIndex = 0;
                 }
-            }
-            maintenanceItem.disabled = !locId;
-            if (!locId) {
-                maintenanceItem.selectedIndex = 0;
             }
         }
         maintenanceLocation.addEventListener('change', filterMaintenanceItems);
@@ -2289,15 +2252,6 @@ function gearroomInit() {
             }
         });
     }
-
-    createCameraScanner({
-        openButtonSelector: '#camera-scan-maintenance',
-        stopButtonSelector: '#camera-scan-maintenance',
-        panelSelector: '#maintenance-camera-panel',
-        videoSelector: '#maintenance-scan-video',
-        statusSelector: '#maintenance-scan-status',
-        inputSelector: '#maintenance-scan-asset',
-    });
 
     /* ---------- Staff quick action: slip-code input above the camera button ---------- */
     // The slip field lives inside #home-action-form (above the "Open camera

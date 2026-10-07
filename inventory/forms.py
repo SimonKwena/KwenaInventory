@@ -469,7 +469,6 @@ class AnnouncementForm(forms.ModelForm):
 
 
 class MaintenanceForm(forms.Form):
-    asset_tag = forms.CharField(max_length=100, required=False, label="Asset tag / SKU")
     item = forms.ModelChoiceField(
         queryset=StockEntry.objects.filter(is_active=True).select_related("catalog_item").order_by("catalog_item__name"),
         required=True,
@@ -498,15 +497,8 @@ class MaintenanceForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
-        asset_tag = (cleaned.get("asset_tag") or "").strip()
-        if asset_tag:
-            item = StockEntry.objects.filter(catalog_item__sku__iexact=asset_tag, is_active=True).first()
-            if not item:
-                self.add_error("asset_tag", "No item found with that SKU.")
-            else:
-                cleaned["item"] = item
         if not cleaned.get("item"):
-            self.add_error("item", "Choose an item or scan its QR code.")
+            self.add_error("item", "Choose an item.")
         quantity = cleaned.get("quantity") or 1
         item = cleaned.get("item")
         if item and quantity > (item.quantity_available or 0):

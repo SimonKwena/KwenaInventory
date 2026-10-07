@@ -165,27 +165,6 @@
     <form method="post" action="{% url 'inventory:maintenance_start' %}" id="maintenance-form">
         {% csrf_token %}
 
-        <div class="form-row">
-            <div class="field-input-group">
-                <label class="label" for="maintenance-scan-asset">Asset tag / SKU</label>
-                <div class="field-input-row">
-                    <input type="text" name="asset_tag" id="maintenance-scan-asset" placeholder="Enter SKU or scan with camera">
-                    <button type="button" id="clear-maintenance-asset" class="button-link clear-button">Clear</button>
-                </div>
-            </div>
-            <div>
-                <button type="button" id="camera-scan-maintenance" class="button-link secondary">Open camera scan</button>
-            </div>
-        </div>
-
-        <div class="card card-light" id="maintenance-camera-panel" style="display:none;">
-            <video id="maintenance-scan-video" playsinline autoplay muted></video>
-            <p id="maintenance-scan-status" class="section-note">Allow camera access and point the QR code at the camera.</p>
-            <div class="form-row">
-                <button type="button" id="stop-camera-maintenance" class="button-link secondary">Stop camera</button>
-            </div>
-        </div>
-
         <div class="form-row form-row-half">
             <div>
                 <label class="label" for="id_location">Location <span class="required-star">*</span></label>
@@ -198,14 +177,13 @@
             </div>
             <div>
                 <label class="label" for="id_item">Item <span class="required-star">*</span></label>
-                <select name="item" id="id_item" class="qa-item-select" required disabled>
+                <select name="item" id="id_item" class="qa-item-select" required>
                     <option value="">Choose an item</option>
                     {% for item in items %}
                         <option value="{{ item.id }}" data-location-id="{{ item.location.id|default:'' }}">{{ item.name }} &middot; {{ item.quantity_available }} available</option>
                     {% endfor %}
                 </select>
                 {% if form.item.errors %}<ul class="errorlist">{% for error in form.item.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
-                {% if form.asset_tag.errors %}<ul class="errorlist">{% for error in form.asset_tag.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
             </div>
             <div>
                 <label class="label" for="id_quantity">Quantity <span class="required-star">*</span></label>
