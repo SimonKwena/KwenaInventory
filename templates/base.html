@@ -56,7 +56,7 @@
                                     <a class="nav-link {% if '/inventory/staff/' in request.path %}is-active{% endif %}" href="{% url 'inventory:staff_home' %}">Quick action</a>
                                     {% endif %}
                                     {% if user_role == "staff" %}
-                                    <a class="nav-link {% if '/inventory/staff/' in request.path %}is-active{% endif %}" href="{% url 'inventory:staff_home' %}">Quick action</a>
+                                    <a class="nav-link {% if '/inventory/staff/' in request.path %}is-active{% endif %}" href="{% url 'inventory:staff_home' %}">Home</a>
                                     {% endif %}
                                     <a class="nav-link {% if '/inventory/catalog' in request.path %}is-active{% endif %}" href="{% url 'inventory:catalog' %}">Browse Items</a>
                                     <div class="nav-dropdown" id="manage-dropdown">
