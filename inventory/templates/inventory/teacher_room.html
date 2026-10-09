@@ -31,9 +31,6 @@
                 <tr>
                     <td>
                         <strong>{{ item.catalog_item.name }}</strong>
-                        {% if item.catalog_item.sku %}
-                            <br><span class="section-note">SKU: {{ item.catalog_item.sku }}</span>
-                        {% endif %}
                     </td>
                     <td>{{ item.catalog_item.category }}{% if item.catalog_item.subcategory %} &middot; {{ item.catalog_item.subcategory }}{% endif %}</td>
                     <td>{{ item.quantity_total }}</td>
