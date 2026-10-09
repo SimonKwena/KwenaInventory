@@ -561,6 +561,13 @@ def staff_home(request):
         desc = (item.catalog_item.description or "").strip()
         item.type_label = desc if not desc.startswith("Imported from") else ""
         item.group_label = (item.catalog_item.category or "").strip() or (item.type_label or "Items")
+    now = timezone.now()
+    announcements = (
+        Announcement.objects.filter(is_active=True)
+        .filter(Q(visible_until__isnull=True) | Q(visible_until__gte=now))
+        .order_by("-created_at")
+    )
+    slip_request = _pop_slip_request(request)
 
     return render(
         request,
@@ -573,7 +580,16 @@ def staff_home(request):
             "can_book_ahead": can_book_ahead(request.user),
             "can_check_out": can_check_out(request.user),
             "can_check_in": can_check_in(request.user, has_active_gear),
+            "total_items": len(items),
+            "total_available": sum(item.quantity_available for item in items),
+            "total_out": sum(item.quantity_out for item in items),
+            "borrowed_items": borrowed_items,
+            "announcements": announcements,
+            "pending_requests": _home_pending_requests(request.user),
+            "reservations": _home_reservations(request.user),
             "active_loans": active_loans,
+            "slip_request": slip_request,
+            "slip_return_url": _slip_return_url(request, slip_request),
             "kits": Kit.objects.filter(is_active=True, created_by=request.user).order_by("name"),
         },
     )
