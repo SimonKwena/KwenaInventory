@@ -495,10 +495,7 @@ def teacher_home(request):
 
 @login_required
 def teacher_room(request):
-    """View the gear in the teacher's assigned room."""
-    if role_of(request.user) != ROLE_TEACHER:
-        return redirect("inventory:home")
-
+    """View the gear in the user's assigned room."""
     profile = getattr(request.user, "user_profile", None)
     assigned_location = getattr(profile, "assigned_location", None)
 

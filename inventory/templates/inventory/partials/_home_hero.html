@@ -3,7 +3,7 @@
             <div class="home-hero-copy">
                 <div class="home-hero-header">
                     <h2>Welcome back, {{ request.user.guest_profile.full_name|default:request.user.get_full_name|default:request.user.username }}</h2>
-                    {% if is_teacher %}
+                    {% if request.user.user_profile.assigned_location %}
                     <a class="button-link btn-sm" href="{% url 'inventory:teacher_room' %}">My Room</a>
                     {% endif %}
                 </div>
