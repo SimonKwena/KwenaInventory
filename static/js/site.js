@@ -295,25 +295,6 @@ function tickRelativeTimes() {
 /* One-time bindings for elements that live outside #main and survive live
    refreshes (theme toggle, top nav, toasts, catalog group collapse). */
 function initGlobal() {
-    /* ---------- Theme toggle (persisted) ---------- */
-    const themeToggle = document.getElementById('theme-toggle');
-    const root = document.documentElement;
-    const storedTheme = localStorage.getItem('gearroom-theme');
-    const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-    if (storedTheme) {
-        root.setAttribute('data-theme', storedTheme);
-    } else if (prefersLight) {
-        root.setAttribute('data-theme', 'light');
-    }
-
-    if (themeToggle) {
-        themeToggle.addEventListener('click', function () {
-            const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-            root.setAttribute('data-theme', next);
-            localStorage.setItem('gearroom-theme', next);
-        });
-    }
-
     /* ---------- Mobile navigation ---------- */
     const navToggle = document.getElementById('nav-toggle');
     const topbar = document.getElementById('topbar');
