@@ -18,6 +18,7 @@
             <div class="actions">
                 {% if user_role == "superadmin" %}
                 <a class="button-link" href="{% url 'inventory:item_create' %}">Add item</a>
+                <a class="button-link secondary" href="{% url 'inventory:item_import' %}">Import from Excel</a>
                 {% endif %}
                 {% if user_role == "superadmin" %}
                 <a class="button-link secondary" href="{% url 'inventory:stock_take_list' %}">Stock takes</a>

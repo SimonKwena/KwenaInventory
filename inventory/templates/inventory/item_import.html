@@ -1,0 +1,365 @@
+{% extends 'base.html' %}
+
+{% block title %}Import items | Kwena Gear Room{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="action-bar">
+        <div>
+            <h2>Import items from Excel</h2>
+            <p class="section-note">
+                Upload a filled-in sheet to add items and room stock in bulk — the same result as using
+                "Add item" one row at a time. You get an editable preview first: fix any cell or drop a
+                row, and nothing is saved until you submit it.
+            </p>
+        </div>
+        <div class="actions">
+            <a class="button-link secondary" href="{% url 'inventory:item_list' %}">Back to items</a>
+        </div>
+    </div>
+</div>
+
+{% if result %}
+<div class="card">
+    <h3>Import complete</h3>
+    <div class="message success">
+        <span>
+            {{ result.items_created }} new item(s) created, {{ result.stock_created }} room stock row(s) added
+            and {{ result.stock_updated }} existing stock row(s) updated. QR codes were generated automatically.
+        </span>
+    </div>
+    {% if result.skipped_existing %}
+        <p class="section-note">{{ result.skipped_existing }} row(s) were skipped because they matched items you already have.</p>
+    {% endif %}
+    {% if summary.removed %}
+        <p class="section-note">{{ summary.removed }} row(s) were removed before submitting.</p>
+    {% endif %}
+    {% if result.skipped_errors %}
+        <p class="section-note">{{ result.skipped_errors }} row(s) were skipped due to errors.</p>
+    {% endif %}
+    {% if result.items %}
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr><th>Item</th><th>Room stock row</th></tr>
+                </thead>
+                <tbody>
+                    {% for catalog, stock_pk in result.items %}
+                        <tr>
+                            <td>{{ catalog.name }}</td>
+                            <td><a href="{% url 'inventory:item_detail' stock_pk %}">#{{ stock_pk }}</a></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+    <div class="actions">
+        <a class="button-link" href="{% url 'inventory:item_import' %}">Import another sheet</a>
+        <a class="button-link secondary" href="{% url 'inventory:item_list' %}">Back to items</a>
+    </div>
+</div>
+
+{% elif entries %}
+<div class="card">
+    <h3 class="form-section-title">Check the rows before importing</h3>
+    <div class="stat-grid">
+        <div class="stat"><div class="stat-value">{{ summary.new }}</div><div class="stat-label">New items</div></div>
+        <div class="stat"><div class="stat-value">{{ summary.existing }}</div><div class="stat-label">Add to existing</div></div>
+        <div class="stat"><div class="stat-value">{{ summary.errors }}</div><div class="stat-label">Rows with errors</div></div>
+        <div class="stat"><div class="stat-value">{{ summary.removed }}</div><div class="stat-label">Removed rows</div></div>
+        <div class="stat"><div class="stat-value">{{ summary.total }}</div><div class="stat-label">Total rows</div></div>
+    </div>
+    {% if summary.errors %}
+        <p class="message error">
+            <span>Fix the {{ summary.errors }} row(s) marked "Error" below — you can edit any cell. Nothing has been saved yet.</span>
+        </p>
+    {% endif %}
+    <form method="post" action="{% url 'inventory:item_import' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="confirm">
+        <style>
+            /* Per-row field cards, matching the "Add item" form's labelled
+               two-column layout instead of a cramped spreadsheet grid. */
+            #import-rows { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+            .import-row {
+                border: 1px solid var(--border-soft);
+                border-radius: var(--radius-md);
+                background: var(--surface-2);
+                padding: 16px;
+            }
+            .import-row .form-row { margin-bottom: 12px; }
+            .import-row-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                flex-wrap: wrap;
+                gap: 10px;
+                margin-bottom: 14px;
+            }
+            .import-row-skip {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 0.82rem;
+                color: var(--text-muted);
+            }
+            .import-row-badge {
+                font-size: 0.72rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                padding: 4px 10px;
+                border-radius: 999px;
+                background: rgba(212, 175, 55, 0.16);
+                color: #d4af37;
+                white-space: nowrap;
+            }
+            .import-row.is-existing .import-row-badge { background: rgba(59, 130, 246, 0.16); color: #7aa7f0; }
+            .import-row.is-error { border-color: rgba(186, 33, 33, 0.55); }
+            .import-row.is-error .import-row-badge { background: rgba(186, 33, 33, 0.18); color: #e06c6c; }
+            .import-row.is-removed { opacity: 0.55; }
+            .import-row.is-removed .import-row-badge { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); }
+            .import-row-messages { margin: 0; }
+            .import-row-messages div { margin: 2px 0 0; font-size: 0.78rem; line-height: 1.4; }
+            /* The global `input { width: 100% }` rule stretches checkboxes too. */
+            .import-checkbox {
+                width: 17px;
+                height: 17px;
+                min-width: 0;
+                padding: 0;
+                margin: 0;
+                cursor: pointer;
+            }
+        </style>
+        <div id="import-rows">
+            {% for entry in entries %}
+                <div class="import-row{% if entry.result == 'existing' %} is-existing{% endif %}{% if entry.result == 'error' %} is-error{% endif %}{% if entry.result == 'removed' %} is-removed{% endif %}">
+                    <div class="import-row-head">
+                        <label class="import-row-skip">
+                            <input type="checkbox" class="import-checkbox" name="row-{{ forloop.counter0 }}-remove" value="1">
+                            Skip this row
+                        </label>
+                        <span class="import-row-badge">
+                            {% if entry.result == "error" %}Error
+                            {% elif entry.result == "removed" %}Removed
+                            {% elif entry.result == "existing" %}Add to existing
+                            {% else %}New item{% endif %}
+                        </span>
+                    </div>
+                    <div class="form-row form-row-half">
+                        <div class="field-input-group">
+                            <label class="label">Item name</label>
+                            <input type="text" name="row-{{ forloop.counter0 }}-name" value="{{ entry.name }}">
+                        </div>
+                        <div class="field-input-group">
+                            <label class="label">SKU</label>
+                            <input type="text" name="row-{{ forloop.counter0 }}-sku" value="{{ entry.sku }}">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="field-input-group">
+                            <label class="label">Description</label>
+                            <input type="text" name="row-{{ forloop.counter0 }}-description" value="{{ entry.description }}">
+                        </div>
+                    </div>
+                    <div class="form-row form-row-half">
+                        <div class="field-input-group">
+                            <label class="label">Category</label>
+                            <input type="text" name="row-{{ forloop.counter0 }}-category" value="{{ entry.category }}">
+                        </div>
+                        <div class="field-input-group">
+                            <label class="label">Subcategory</label>
+                            <input type="text" name="row-{{ forloop.counter0 }}-subcategory" value="{{ entry.subcategory }}">
+                        </div>
+                    </div>
+                    <div class="form-row form-row-half">
+                        <div class="field-input-group">
+                            <label class="label">Room</label>
+                            <input type="text" name="row-{{ forloop.counter0 }}-location" value="{{ entry.location }}">
+                        </div>
+                        <div class="field-input-group">
+                            <label class="label">Quantity</label>
+                            <input type="number" min="0" name="row-{{ forloop.counter0 }}-quantity_total" value="{{ entry.quantity_total }}">
+                        </div>
+                    </div>
+                    <div class="form-row form-row-half">
+                        <div class="field-input-group">
+                            <label class="label">Quantity out</label>
+                            <input type="number" min="0" name="row-{{ forloop.counter0 }}-quantity_out" value="{{ entry.quantity_out }}">
+                        </div>
+                        <div class="field-input-group">
+                            <label class="label">Quantity maintenance</label>
+                            <input type="number" min="0" name="row-{{ forloop.counter0 }}-quantity_maintenance" value="{{ entry.quantity_maintenance }}">
+                        </div>
+                    </div>
+                    <div class="form-row form-row-half">
+                        <div class="field-input-group">
+                            <label class="label">Condition</label>
+                            <input type="text" name="row-{{ forloop.counter0 }}-condition" value="{{ entry.condition }}">
+                        </div>
+                        <div class="field-input-group">
+                            <label class="label">Status</label>
+                            <input type="text" name="row-{{ forloop.counter0 }}-status" value="{{ entry.status }}">
+                        </div>
+                    </div>
+                    {% if entry.errors or entry.notes or entry.warnings %}
+                        <p class="section-note import-row-messages">
+                            {% for error in entry.errors %}<div>{{ error }}</div>{% endfor %}
+                            {% for note in entry.notes %}<div>{{ note }}</div>{% endfor %}
+                            {% for warning in entry.warnings %}<div>{{ warning }}</div>{% endfor %}
+                        </p>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="button-link secondary btn-sm" id="add-import-row">+ Add row</button>
+        <p class="section-note" style="margin-top:12px;">
+            <label style="font-weight:400;">
+                <input type="checkbox" class="import-checkbox" name="merge_existing" value="1" {% if merge_existing %}checked{% endif %}>
+                Add stock to items I already have (matched by SKU). Uncheck to import only brand-new items.
+            </label>
+        </p>
+        <p class="section-note">The whole sheet is applied together, or rolled back together if anything fails.</p>
+        <div class="actions">
+            <button type="submit" class="button-link" {% if summary.errors %}disabled{% endif %}>Import {{ summary.total }} row(s)</button>
+            <a class="button-link secondary" href="{% url 'inventory:item_import' %}">Cancel — upload a different sheet</a>
+        </div>
+    </form>
+</div>
+
+<template id="empty-import-row">
+    <div class="import-row">
+        <div class="import-row-head">
+            <label class="import-row-skip">
+                <input type="checkbox" class="import-checkbox" name="row-__prefix__-remove" value="1">
+                Skip this row
+            </label>
+            <span class="import-row-badge">New row</span>
+        </div>
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label">Item name</label>
+                <input type="text" name="row-__prefix__-name" value="">
+            </div>
+            <div class="field-input-group">
+                <label class="label">SKU</label>
+                <input type="text" name="row-__prefix__-sku" value="">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="field-input-group">
+                <label class="label">Description</label>
+                <input type="text" name="row-__prefix__-description" value="">
+            </div>
+        </div>
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label">Category</label>
+                <input type="text" name="row-__prefix__-category" value="">
+            </div>
+            <div class="field-input-group">
+                <label class="label">Subcategory</label>
+                <input type="text" name="row-__prefix__-subcategory" value="">
+            </div>
+        </div>
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label">Room</label>
+                <input type="text" name="row-__prefix__-location" value="">
+            </div>
+            <div class="field-input-group">
+                <label class="label">Quantity</label>
+                <input type="number" min="0" name="row-__prefix__-quantity_total" value="0">
+            </div>
+        </div>
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label">Quantity out</label>
+                <input type="number" min="0" name="row-__prefix__-quantity_out" value="0">
+            </div>
+            <div class="field-input-group">
+                <label class="label">Quantity maintenance</label>
+                <input type="number" min="0" name="row-__prefix__-quantity_maintenance" value="0">
+            </div>
+        </div>
+        <div class="form-row form-row-half">
+            <div class="field-input-group">
+                <label class="label">Condition</label>
+                <input type="text" name="row-__prefix__-condition" value="">
+            </div>
+            <div class="field-input-group">
+                <label class="label">Status</label>
+                <input type="text" name="row-__prefix__-status" value="">
+            </div>
+        </div>
+    </div>
+</template>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        var rowsContainer = document.getElementById("import-rows");
+        var addBtn = document.getElementById("add-import-row");
+        if (!rowsContainer || !addBtn) { return; }
+
+        addBtn.addEventListener("click", function () {
+            var template = document.getElementById("empty-import-row");
+            if (!template) { return; }
+            var index = rowsContainer.querySelectorAll(".import-row").length;
+            var row = template.content.cloneNode(true).querySelector(".import-row");
+            if (!row) { return; }
+            row.innerHTML = row.innerHTML.replace(/__prefix__/g, index);
+            rowsContainer.appendChild(row);
+        });
+    });
+</script>
+
+{% else %}
+<div class="card">
+    <h3 class="form-section-title">1. Download the template</h3>
+    <p class="section-note">
+        The template has the expected columns plus example rows and a Lists sheet with every valid
+        location, condition and status name.
+    </p>
+    <div class="actions">
+        <a class="button-link secondary" href="{% url 'inventory:item_import_template' %}">Download Excel template</a>
+    </div>
+</div>
+
+<div class="card">
+    <h3 class="form-section-title">2. Upload the filled-in sheet</h3>
+    <form method="post" action="{% url 'inventory:item_import' %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="preview">
+        <div class="form-row">
+            <div class="field-input-group">
+                <label class="label" for="id_sheet">Excel file (.xlsx)</label>
+                <input type="file" name="sheet" id="id_sheet" accept=".xlsx" required class="text-input">
+            </div>
+        </div>
+        <div class="form-row">
+            <label style="font-weight:400;">
+                <input type="checkbox" class="import-checkbox" name="merge_existing" value="1" checked>
+                Add stock to items I already have (matched by SKU). Uncheck to import only brand-new items.
+            </label>
+        </div>
+        <div class="actions">
+            <button type="submit" class="button-link">Check the sheet</button>
+            <a class="button-link secondary" href="{% url 'inventory:item_list' %}">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h3 class="form-section-title">How the sheet must look</h3>
+    <ul class="section-note">
+        <li>One worksheet, one row per item <strong>per room</strong> — an item stored in three rooms is three rows.</li>
+        <li>Required columns: <strong>Name</strong>, <strong>Location</strong>, <strong>Quantity</strong>. Optional: SKU, Description, Category, Subcategory, Quantity Out, Quantity Maintenance, Condition, Status.</li>
+        <li>Location, Condition and Status must match the names on the template's Lists sheet, or the row is reported as an error.</li>
+        <li>Leave the SKU blank and one is generated from the item name; the next sheet with that name adds stock to the same item instead of creating a duplicate.</li>
+        <li>Quantity Out and Quantity Maintenance are optional and default to 0.</li>
+        <li>You get an editable preview of every row — fix any cell, tick the box to drop a row, or add a missing one — and submitting applies the whole sheet in one go, or rolls everything back if anything fails.</li>
+    </ul>
+</div>
+{% endif %}
+{% endblock %}

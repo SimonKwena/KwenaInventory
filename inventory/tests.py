@@ -1,6 +1,9 @@
 from datetime import timedelta
+from io import BytesIO
 
+import openpyxl
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -572,3 +575,258 @@ class VoidTransactionTests(TestCase):
         from django.utils import timezone
 
         return timezone.now() + timezone.timedelta(days=1)
+
+
+IMPORT_HEADERS = [
+    "Name", "SKU", "Description", "Category", "Subcategory", "Location",
+    "Quantity", "Quantity Out", "Quantity Maintenance", "Condition", "Status",
+]
+IMPORT_FIELDS = (
+    "name", "sku", "description", "category", "subcategory", "location",
+    "quantity_total", "quantity_out", "quantity_maintenance", "condition", "status",
+)
+IMPORT_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _workbook_bytes(rows, headers=None):
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Items"
+    sheet.append(headers or IMPORT_HEADERS)
+    for row in rows:
+        sheet.append(row)
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+class ItemImportTests(TestCase):
+    def setUp(self):
+        self.room_one = Location.objects.create(name="Gear Room")
+        self.room_two = Location.objects.create(name="Stage")
+        self.condition = ConditionOption.objects.create(name="Working")
+        self.status = StatusOption.objects.create(name="Available")
+        self.admin = get_user_model().objects.create_superuser(
+            username="boss", email="boss@kwenamusic.co.za", password="secret123"
+        )
+        self.member = get_user_model().objects.create_user(
+            username="member", email="member@kwenamusic.co.za", password="secret123"
+        )
+
+    def _row(self, name, sku="", description="", category="", subcategory="", location="",
+             quantity_total=0, quantity_out=0, quantity_maintenance=0, condition="", status=""):
+        return {
+            "name": name, "sku": sku, "description": description, "category": category,
+            "subcategory": subcategory, "location": location, "quantity_total": quantity_total,
+            "quantity_out": quantity_out, "quantity_maintenance": quantity_maintenance,
+            "condition": condition, "status": status,
+        }
+
+    def _sheet(self, rows, headers=None, name="sheet.xlsx"):
+        sheet_rows = [[row.get(field, "") for field in IMPORT_FIELDS] for row in rows]
+        return SimpleUploadedFile(name, _workbook_bytes(sheet_rows, headers), content_type=IMPORT_CONTENT_TYPE)
+
+    def _upload(self, sheet, **extra):
+        data = {"action": "preview", "sheet": sheet}
+        data.update(extra)
+        return self.client.post(reverse("inventory:item_import"), data)
+
+    def _confirm(self, rows, **extra):
+        """Submit the editable preview exactly as the browser would: one
+        ``row-<n>-<field>`` input per row, so the values posted here are the
+        (possibly edited) ones the view imports."""
+        data = {"action": "confirm", "merge_existing": "1"}
+        for index, row in enumerate(rows):
+            for field, value in row.items():
+                data[f"row-{index}-{field}"] = value
+        data.update(extra)
+        return self.client.post(reverse("inventory:item_import"), data)
+
+    def test_preview_then_submit_creates_items_and_stock(self):
+        rows = [
+            self._row("XLR Cable 10m", "XLR-10M", "Balanced audio cable", "Cables", "XLR", "Gear Room", 5, condition="Working", status="Available"),
+            self._row("XLR Cable 10m", "XLR-10M", "Balanced audio cable", "Cables", "XLR", "Stage", 2, condition="Working", status="Available"),
+            self._row("Dynamic Microphone", description="Vocal microphone", category="Mics", subcategory="Dynamic", location="Gear Room", quantity_total=3, condition="Working", status="Available"),
+        ]
+        self.client.force_login(self.admin)
+        response = self._upload(self._sheet(rows))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["summary"]["new"], 3)
+        self.assertEqual(response.context["summary"]["errors"], 0)
+        # The preview is editable: every cell comes back as an input.
+        self.assertContains(response, 'name="row-0-name"')
+        self.assertContains(response, 'name="row-0-quantity_total"')
+        # Nothing is written until the preview is submitted.
+        self.assertEqual(CatalogItem.objects.count(), 0)
+
+        response = self._confirm(rows)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Import complete")
+        self.assertEqual(CatalogItem.objects.count(), 2)
+        xlr = CatalogItem.objects.get(sku="XLR-10M")
+        mic = CatalogItem.objects.get(sku="dynamic-microphone")
+        self.assertEqual(mic.name, "Dynamic Microphone")
+        self.assertEqual(StockEntry.objects.filter(catalog_item=xlr).count(), 2)
+        self.assertEqual(StockEntry.objects.get(catalog_item=xlr, location=self.room_one).quantity_total, 5)
+        self.assertEqual(StockEntry.objects.get(catalog_item=xlr, location=self.room_two).quantity_total, 2)
+        mic_stock = StockEntry.objects.get(catalog_item=mic)
+        self.assertEqual(mic_stock.quantity_total, 3)
+        self.assertEqual(mic_stock.condition, self.condition)
+        self.assertEqual(mic_stock.status, self.status)
+        # QR codes are generated on save, the same as the manual add-item form.
+        self.assertTrue(mic_stock.qr_code)
+
+    def test_edits_made_in_the_preview_are_what_gets_imported(self):
+        rows = [self._row("Mic", "MIC-1", location="Roof", quantity_total=2)]
+        self.client.force_login(self.admin)
+        response = self._upload(self._sheet(rows))
+        self.assertEqual(response.context["summary"]["errors"], 1)
+
+        # The admin fixes the room name and the SKU in the preview and submits.
+        rows[0]["location"] = "Gear Room"
+        rows[0]["sku"] = "MIC-01"
+        rows[0]["quantity_total"] = 7
+        response = self._confirm(rows)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Import complete")
+        self.assertEqual(
+            StockEntry.objects.get(catalog_item__sku="MIC-01", location=self.room_one).quantity_total, 7
+        )
+
+    def test_edit_that_introduces_an_error_reshows_the_preview(self):
+        rows = [self._row("Mic", "MIC-1", location="Gear Room", quantity_total=2)]
+        self.client.force_login(self.admin)
+        self._upload(self._sheet(rows))
+
+        rows[0]["location"] = "Nowhere"
+        response = self._confirm(rows)
+        self.assertEqual(response.status_code, 200)
+        # The single quotes come back HTML-escaped, so match on the room name.
+        self.assertContains(response, "Unknown location")
+        self.assertContains(response, "Nowhere")
+        self.assertEqual(CatalogItem.objects.count(), 0)
+
+    def test_removed_row_is_skipped(self):
+        rows = [
+            self._row("Mic", "MIC-1", location="Gear Room", quantity_total=2),
+            self._row("Cable", "CBL-1", location="Gear Room", quantity_total=4),
+        ]
+        self.client.force_login(self.admin)
+        self._upload(self._sheet(rows))
+
+        response = self._confirm(rows, **{"row-0-remove": "1"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Import complete")
+        self.assertFalse(StockEntry.objects.filter(catalog_item__sku="MIC-1").exists())
+        self.assertEqual(StockEntry.objects.get(catalog_item__sku="CBL-1").quantity_total, 4)
+
+    def test_blank_row_added_to_the_preview_is_ignored(self):
+        rows = [self._row("Mic", "MIC-1", location="Gear Room", quantity_total=2)]
+        self.client.force_login(self.admin)
+        self._upload(self._sheet(rows))
+
+        rows.append({field: "" for field in IMPORT_FIELDS})
+        response = self._confirm(rows)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Import complete")
+        self.assertEqual(CatalogItem.objects.count(), 1)
+
+    def test_existing_sku_adds_stock_instead_of_duplicating(self):
+        catalog = CatalogItem.objects.create(name="XLR Cable 10m", sku="XLR-10M", category="Cables")
+        StockEntry.objects.create(catalog_item=catalog, location=self.room_one, quantity_total=5)
+        self.client.force_login(self.admin)
+        rows = [
+            self._row("XLR Cable 10m", "XLR-10M", location="Gear Room", quantity_total=3),
+            self._row("XLR Cable 10m", "XLR-10M", location="Stage", quantity_total=2),
+        ]
+        response = self._upload(self._sheet(rows))
+        self.assertEqual(response.context["summary"]["existing"], 2)
+
+        self._confirm(rows)
+        self.assertEqual(CatalogItem.objects.count(), 1)
+        self.assertEqual(StockEntry.objects.get(catalog_item=catalog, location=self.room_one).quantity_total, 8)
+        self.assertEqual(StockEntry.objects.get(catalog_item=catalog, location=self.room_two).quantity_total, 2)
+
+    def test_blank_sku_matches_existing_item_by_name(self):
+        catalog = CatalogItem.objects.create(name="XLR Cable 10m", sku="XLR-10M")
+        StockEntry.objects.create(catalog_item=catalog, location=self.room_one, quantity_total=4)
+        self.client.force_login(self.admin)
+        rows = [self._row("XLR Cable 10m", location="Gear Room", quantity_total=6)]
+        self.assertEqual(self._upload(self._sheet(rows)).context["summary"]["existing"], 1)
+
+        self._confirm(rows)
+        self.assertEqual(CatalogItem.objects.count(), 1)
+        self.assertEqual(StockEntry.objects.get(catalog_item=catalog, location=self.room_one).quantity_total, 10)
+
+    def test_new_items_only_skips_existing_items(self):
+        catalog = CatalogItem.objects.create(name="XLR Cable 10m", sku="XLR-10M")
+        StockEntry.objects.create(catalog_item=catalog, location=self.room_one, quantity_total=5)
+        self.client.force_login(self.admin)
+        rows = [
+            self._row("XLR Cable 10m", "XLR-10M", location="Gear Room", quantity_total=3),
+            self._row("New Mic", "MIC-01", category="Mics", subcategory="Dynamic", location="Stage", quantity_total=2),
+        ]
+        response = self._upload(self._sheet(rows), merge_existing="0")
+        self.assertFalse(response.context["merge_existing"])
+
+        self._confirm(rows, merge_existing="0")
+        self.assertEqual(CatalogItem.objects.count(), 2)
+        self.assertEqual(StockEntry.objects.get(catalog_item=catalog, location=self.room_one).quantity_total, 5)
+        self.assertEqual(StockEntry.objects.get(catalog_item__sku="MIC-01", location=self.room_two).quantity_total, 2)
+
+    def test_missing_required_column_is_reported(self):
+        self.client.force_login(self.admin)
+        headers = IMPORT_HEADERS[:6] + IMPORT_HEADERS[7:]
+        rows = [self._row("Mic", "MIC-1", location="Gear Room", quantity_total=2)]
+        response = self._upload(self._sheet(rows, headers=headers))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(CatalogItem.objects.count(), 0)
+
+    def test_non_xlsx_upload_is_rejected(self):
+        self.client.force_login(self.admin)
+        upload = SimpleUploadedFile(
+            "items.csv", b"Name,Location,Quantity\nMic,Gear Room,2\n", content_type="text/csv"
+        )
+        response = self._upload(upload)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(CatalogItem.objects.count(), 0)
+
+    def test_duplicate_rows_for_same_room_are_added_together(self):
+        self.client.force_login(self.admin)
+        rows = [
+            self._row("Mic", "MIC-1", category="Mics", location="Gear Room", quantity_total=2),
+            self._row("Mic", "MIC-1", category="Mics", location="Gear Room", quantity_total=3),
+        ]
+        self._upload(self._sheet(rows))
+        self._confirm(rows)
+        self.assertEqual(StockEntry.objects.get(catalog_item__sku="MIC-1", location=self.room_one).quantity_total, 5)
+
+    def test_blank_quantity_in_sheet_is_warned_and_saved_as_zero(self):
+        self.client.force_login(self.admin)
+        row = self._row("Mic", "MIC-1", location="Gear Room", quantity_total="")
+        response = self._upload(self._sheet([row]))
+        self.assertContains(response, "Quantity was blank")
+
+        self._confirm([row])
+        self.assertEqual(StockEntry.objects.get(catalog_item__sku="MIC-1", location=self.room_one).quantity_total, 0)
+
+    def test_template_download_returns_a_valid_workbook(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("inventory:item_import_template"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], IMPORT_CONTENT_TYPE)
+        workbook = openpyxl.load_workbook(BytesIO(response.content))
+        sheet = workbook.worksheets[0]
+        headers = [cell.value for cell in sheet[1]]
+        self.assertEqual(headers, IMPORT_HEADERS)
+        self.assertIn("Lists", workbook.sheetnames)
+        self.assertIn("Gear Room", [row[0] for row in workbook["Lists"].iter_rows(values_only=True)])
+
+    def test_import_pages_require_superadmin(self):
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(reverse("inventory:item_import")).status_code, 302)
+        self.assertEqual(self.client.get(reverse("inventory:item_import_template")).status_code, 302)
+        rows = [self._row("Mic", "MIC-1", location="Gear Room", quantity_total=2)]
+        self.assertEqual(self._upload(self._sheet(rows)).status_code, 302)
+        self.assertEqual(self._confirm(rows).status_code, 302)
+        self.assertEqual(CatalogItem.objects.count(), 0)

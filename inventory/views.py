@@ -1,5 +1,6 @@
 import json
 import uuid
+from io import BytesIO
 
 from django.conf import settings
 from django.contrib import messages
@@ -10,7 +11,7 @@ from django.contrib.auth.models import User
 from django.core.paginator import Paginator
 from django.db.models import Q
 
-from django.http import FileResponse, JsonResponse, HttpResponseRedirect
+from django.http import FileResponse, HttpResponse, JsonResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -31,6 +32,16 @@ from .forms import (
     StockEntryFormSet,
     StockEntryRowForm,
     TransactionForm,
+)
+from .imports import (
+    IMPORT_FILE_CONTENT_TYPE,
+    ImportValidationError,
+    apply_import,
+    build_preview,
+    build_template_workbook,
+    parse_upload,
+    rows_from_post,
+    summarize_preview,
 )
 from .models import (
     Announcement,
@@ -2477,6 +2488,83 @@ def item_edit(request, pk):
         form = ItemForm(instance=catalog)
         formset = StockEntryFormSet(queryset=StockEntry.objects.filter(catalog_item=catalog), user=request.user)
     return render(request, "inventory/item_form.html", {"form": form, "formset": formset, "is_edit": True, "item": stock_entry})
+
+
+def _render_import_preview(request, entries, merge_existing):
+    return render(
+        request,
+        "inventory/item_import.html",
+        {
+            "entries": entries,
+            "summary": summarize_preview(entries),
+            "merge_existing": merge_existing,
+        },
+    )
+
+
+@user_passes_test(is_superadmin)
+def item_import(request):
+    """Excel import for items, editable like the "Add item" form.
+
+    Upload -> preview where every row's cells can be corrected (or the row
+    dropped) -> submit applies the edited rows in one transaction, mirroring
+    ``item_create``'s stock rules. Nothing is written until the final submit.
+    """
+    if request.method == "POST":
+        action = request.POST.get("action", "preview")
+        merge_existing = request.POST.get("merge_existing", "1") == "1"
+
+        if action == "confirm":
+            entries = build_preview(rows_from_post(request.POST), merge_existing=merge_existing)
+            blocking = [entry for entry in entries if entry["result"] == "error"]
+            if blocking:
+                # The admin's edits introduced errors: re-show the preview with
+                # those values intact and the new per-row messages.
+                return _render_import_preview(request, entries, merge_existing)
+            applicable = [entry for entry in entries if entry["result"] != "removed"]
+            if not applicable:
+                messages.error(request, "There was nothing to import — every row was removed.")
+                return redirect("inventory:item_import")
+            try:
+                result = apply_import(applicable, merge_existing=merge_existing)
+            except Exception:
+                messages.error(request, "The import failed and nothing was saved. Please try again.")
+                return redirect("inventory:item_import")
+            return render(
+                request,
+                "inventory/item_import.html",
+                {
+                    "result": result,
+                    "merge_existing": merge_existing,
+                    "summary": summarize_preview(entries),
+                },
+            )
+
+        upload = request.FILES.get("sheet")
+        if not upload:
+            messages.error(request, "Choose an Excel (.xlsx) file to import.")
+            return redirect("inventory:item_import")
+        try:
+            rows = parse_upload(upload)
+        except ImportValidationError as exc:
+            messages.error(request, str(exc))
+            return redirect("inventory:item_import")
+        entries = build_preview(rows, merge_existing=merge_existing)
+        return _render_import_preview(request, entries, merge_existing)
+
+    return render(request, "inventory/item_import.html")
+
+
+@user_passes_test(is_superadmin)
+def item_import_template(request):
+    """Download the .xlsx template so the sheet matches what the importer
+    expects before an admin fills it in."""
+    buffer = BytesIO()
+    build_template_workbook().save(buffer)
+    buffer.seek(0)
+    response = HttpResponse(buffer.getvalue(), content_type=IMPORT_FILE_CONTENT_TYPE)
+    response["Content-Disposition"] = 'attachment; filename="kwena-item-import-template.xlsx"'
+    return response
 
 
 @user_passes_test(lambda user: user.is_staff or role_of(user) == ROLE_TEACHER)
