@@ -75,9 +75,10 @@
             <span>Fix the {{ summary.errors }} row(s) marked "Error" below — you can edit any cell. Nothing has been saved yet.</span>
         </p>
     {% endif %}
-    <form method="post" action="{% url 'inventory:item_import' %}">
+    <form method="post" action="{% url 'inventory:item_import' %}" onsubmit="return serializeImportRows(this)">
         {% csrf_token %}
         <input type="hidden" name="action" value="confirm">
+        <input type="hidden" name="rows_json" id="import-rows-json">
         <style>
             /* Per-row field cards, matching the "Add item" form's labelled
                two-column layout instead of a cramped spreadsheet grid. */
@@ -312,6 +313,31 @@
             rowsContainer.appendChild(row);
         });
     });
+
+    function serializeImportRows(form) {
+        var container = document.getElementById("import-rows");
+        var rows = [];
+        container.querySelectorAll(".import-row").forEach(function (row) {
+            var fields = {};
+            row.querySelectorAll("input").forEach(function (input) {
+                var match = input.name.match(/^row-(\d+)-(.+)$/);
+                if (!match) { return; }
+                fields[match[2]] = input.type === "checkbox" ? input.checked : input.value;
+            });
+            rows.push(fields);
+        });
+        // Detach the per-field inputs so they are not posted as hundreds of
+        // separate parameters (Django caps the total number of POST fields).
+        container.querySelectorAll("input").forEach(function (input) {
+            input.remove();
+        });
+        var json = document.createElement("input");
+        json.type = "hidden";
+        json.name = "rows_json";
+        json.value = JSON.stringify(rows);
+        form.appendChild(json);
+        return true;
+    }
 </script>
 
 {% else %}

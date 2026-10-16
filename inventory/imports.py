@@ -8,6 +8,7 @@ JSON-safe list of rows labelled new / existing / error, and
 rules as the manual "Add item" form (:func:`inventory.views.item_create`).
 """
 
+import json
 import logging
 import re
 from io import BytesIO
@@ -194,33 +195,41 @@ def parse_upload(upload):
 
 
 def rows_from_post(post):
-    """Rebuild row dicts from the editable preview, which renders one set of
-    ``row-<n>-<field>`` inputs per row plus a remove checkbox.
-
-    Admins can fix typos, quantities or room names before anything is written,
-    so the submitted values (not the original sheet) are what gets validated
-    and imported. Rows left completely blank — e.g. added with "+ Add row" and
-    never filled in — are dropped rather than reported as errors.
-    """
-    rows = []
+    """Rebuild row dicts from the editable preview's flat ``row-<n>-<field>``
+    inputs (used for small sheets that fit under Django's field limit)."""
+    records = []
     index = 0
     while any(key.startswith(f"row-{index}-") for key in post.keys()):
         prefix = f"row-{index}-"
-        record = _empty_record(index + 1)
-        record["remove"] = post.get(prefix + "remove") in ("1", "on", "true")
+        record = {"remove": post.get(prefix + "remove") in ("1", "on", "true")}
         for field in TEXT_FIELDS:
             record[field] = _cell_text(post.get(prefix + field))
         for field in QUANTITY_FIELDS:
-            quantity, warning = _parse_quantity(post.get(prefix + field), QUANTITY_LABELS[field])
-            record[field] = quantity
+            record[field] = post.get(prefix + field)
+        records.append(record)
+        index += 1
+    return rows_from_records(records)
+
+
+def rows_from_records(data):
+    """Normalize arbitrary row dicts (from ``rows_from_post`` or a posted JSON
+    blob) into preview rows. Completely blank rows are dropped."""
+    rows = []
+    for index, record in enumerate(data):
+        record = dict(record)
+        record.setdefault("remove", False)
+        for field in TEXT_FIELDS:
+            record[field] = _cell_text(record.get(field))
+        for field in QUANTITY_FIELDS:
+            record[field], warning = _parse_quantity(record.get(field), QUANTITY_LABELS[field])
             if warning:
-                record["warnings"].append(warning)
+                record.setdefault("warnings", []).append(warning)
         filled = any(record[field] for field in TEXT_FIELDS) or any(
             record[field] for field in QUANTITY_FIELDS
         )
         if filled or record["remove"]:
+            record["row"] = index + 1
             rows.append(record)
-        index += 1
     return rows
 
 
@@ -256,9 +265,10 @@ def build_preview(rows, merge_existing=True):
     seen_pairs = set()
     for record in rows:
         entry = dict(record)
-        entry["notes"] = list(record["notes"])
-        entry["warnings"] = list(record["warnings"])
-        entry["errors"] = list(record["errors"])
+        entry["notes"] = list(record.get("notes", []))
+        entry["warnings"] = list(record.get("warnings", []))
+        entry["errors"] = list(record.get("errors", []))
+        entry["remove"] = bool(record.get("remove"))
 
         name = record["name"].strip()
         entry["name"] = name
@@ -378,6 +388,7 @@ def apply_import(entries, merge_existing=True):
     """
     summary = {
         "items_created": 0,
+        "items_existing": 0,
         "stock_created": 0,
         "stock_updated": 0,
         "skipped_existing": 0,
@@ -400,15 +411,23 @@ def apply_import(entries, merge_existing=True):
 
                 catalog = CatalogItem.objects.filter(pk=entry["catalog_id"]).first() if entry["catalog_id"] else None
                 if catalog is None:
-                    catalog = CatalogItem.objects.create(
-                        name=entry["name"],
+                    catalog, _created = CatalogItem.objects.get_or_create(
                         sku=entry["sku"],
-                        description=entry["description"],
-                        category=entry["category"],
-                        subcategory=entry["subcategory"],
-                        is_active=True,
+                        defaults={
+                            "name": entry["name"],
+                            "description": entry["description"],
+                            "category": entry["category"],
+                            "subcategory": entry["subcategory"],
+                            "is_active": True,
+                        },
                     )
-                    summary["items_created"] += 1
+                    if _created:
+                        summary["items_created"] += 1
+                    else:
+                        # Same SKU reached twice in one sheet (or matches an
+                        # existing item under different case): treat it like any
+                        # other existing item instead of crashing.
+                        summary["items_existing"] += 1
 
                 stock = StockEntry.objects.filter(catalog_item=catalog, location_id=entry["location_id"]).first()
                 if stock is not None:

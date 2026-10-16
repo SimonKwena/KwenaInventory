@@ -2,6 +2,10 @@ import json
 import uuid
 from io import BytesIO
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
@@ -2515,7 +2519,18 @@ def item_import(request):
         merge_existing = request.POST.get("merge_existing", "1") == "1"
 
         if action == "confirm":
-            entries = build_preview(rows_from_post(request.POST), merge_existing=merge_existing)
+            rows_json = request.POST.get("rows_json")
+            if rows_json:
+                try:
+                    rows = json.loads(rows_json)
+                except (ValueError, TypeError):
+                    messages.error(request, "The sheet data could not be read — upload it again.")
+                    return redirect("inventory:item_import")
+                if not isinstance(rows, list):
+                    raise ValueError("import data must be a list of rows")
+            else:
+                rows = rows_from_post(request.POST)
+            entries = build_preview(rows, merge_existing=merge_existing)
             blocking = [entry for entry in entries if entry["result"] == "error"]
             if blocking:
                 # The admin's edits introduced errors: re-show the preview with
@@ -2527,8 +2542,12 @@ def item_import(request):
                 return redirect("inventory:item_import")
             try:
                 result = apply_import(applicable, merge_existing=merge_existing)
-            except Exception:
-                messages.error(request, "The import failed and nothing was saved. Please try again.")
+            except Exception as exc:
+                logger.exception("Excel item import failed; all changes rolled back")
+                if settings.DEBUG:
+                    messages.error(request, f"Import failed — nothing was saved: {exc}")
+                else:
+                    messages.error(request, "The import failed and nothing was saved. Please try again.")
                 return redirect("inventory:item_import")
             return render(
                 request,
