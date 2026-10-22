@@ -257,8 +257,7 @@
                     <tr>
                         <th class="slip-doc-qty">Qty</th>
                         <th>Item</th>
-                        <th>Type</th>
-                        <th>Sub type</th>
+                        <th>Category</th>
                         <th>Location</th>
                         <th>Condition</th>
                     </tr>
@@ -268,8 +267,7 @@
                     <tr>
                         <td class="slip-doc-qty">{{ line.quantity }}</td>
                         <td>{{ line.item.name }}</td>
-                        <td>{{ line.item.catalog_item.category|default:"—" }}</td>
-                        <td>{{ line.item.catalog_item.subcategory|default:"—" }}</td>
+                        <td>{{ line.item.catalog_item.category|default:"—" }}{% if line.item.catalog_item.category and line.item.catalog_item.subcategory %} · {% endif %}{{ line.item.catalog_item.subcategory|default:"—" }}</td>
                         <td>{% if line.location %}{{ line.location.name }}{% else %}&mdash;{% endif %}</td>
                         <td>{% if line.condition %}{{ line.condition.name }}{% elif line.item_id in return_conditions %}{{ return_conditions|get_item:line.item_id }}{% elif line.item.condition %}{{ line.item.condition.name }}{% else %}&mdash;{% endif %}</td>
                     </tr>
@@ -464,8 +462,7 @@
                     <thead>
                         <tr style="background:#1a1a1a;color:#fff;">
                             <th style="text-align:left;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">Item</th>
-                            <th style="text-align:left;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">Type</th>
-                            <th style="text-align:left;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">Sub type</th>
+                            <th style="text-align:left;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">Category</th>
                             <th style="text-align:left;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">Location</th>
                             <th style="text-align:center;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;width:36px;">Qty</th>
                             <th style="text-align:center;padding:7px 10px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;width:36px;">Pre packed</th>
@@ -476,8 +473,7 @@
                         {% for line in req.items.all %}
                         <tr style="border-bottom:1px solid #e8e8e8;">
                             <td style="padding:6px 10px;font-weight:600;">{{ line.item.name }}</td>
-                            <td style="padding:6px 10px;color:#555;font-size:0.8rem;">{{ line.item.catalog_item.category|default:"&mdash;" }}</td>
-                            <td style="padding:6px 10px;color:#555;font-size:0.8rem;">{{ line.item.catalog_item.subcategory|default:"&mdash;" }}</td>
+                            <td style="padding:6px 10px;color:#555;font-size:0.8rem;">{{ line.item.catalog_item.category|default:"&mdash;" }}{% if line.item.catalog_item.category and line.item.catalog_item.subcategory %} · {% endif %}{{ line.item.catalog_item.subcategory|default:"&mdash;" }}</td>
                             <td style="padding:6px 10px;color:#444;">{% if line.location %}{{ line.location.name }}{% else %}&mdash;{% endif %}</td>
                             <td style="padding:6px 10px;font-weight:700;text-align:center;">{{ line.quantity }}</td>
                             <td style="padding:6px 10px;text-align:center;"><input type="checkbox" disabled style="width:16px;height:16px;cursor:pointer;"></td>
